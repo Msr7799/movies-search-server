@@ -6,7 +6,7 @@ export function healthController(_request: unknown, context: RequestContext) {
   return {
     status: services.tavily && services.geminiSearch && services.geminiSuggestions ? "ready" : "degraded",
     service: "any-movie-server",
-    version: "1.0.0",
+    version: "1.1.0",
     time: new Date().toISOString(),
     services,
     requestId: context.requestId,

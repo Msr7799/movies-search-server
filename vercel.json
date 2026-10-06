@@ -4,6 +4,7 @@
   "outputDirectory": "public",
   "functions": {
     "api/v1/search.ts": { "maxDuration": 55 },
+    "api/v1/media.ts": { "maxDuration": 20 },
     "api/discover.ts": { "maxDuration": 55 },
     "api/v1/suggestions.ts": { "maxDuration": 20 },
     "api/suggest.ts": { "maxDuration": 20 }

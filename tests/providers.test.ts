@@ -53,6 +53,7 @@ describe("provider safety", () => {
       playUrl: "https://cdn.media.example.com/movie/master.m3u8?token=public",
       hlsUrl: "https://cdn.media.example.com/movie/master.m3u8?token=public",
       kind: "hls",
+      detectedBy: "direct_url",
     });
     expect(playableSource("https://blocked.example.com/movie/master.m3u8")).toEqual({ playable: false });
   });

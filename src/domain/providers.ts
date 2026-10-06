@@ -10,8 +10,6 @@ export const DEFAULT_PROVIDERS: readonly ProviderConfig[] = [
   { domain: "youtube.com", name: "YouTube", inAppPlayback: true },
   { domain: "youtu.be", name: "YouTube", inAppPlayback: true },
   { domain: "vimeo.com", name: "Vimeo", inAppPlayback: true },
-  {"domain":"youtube.com","name":"YouTube","inAppPlayback":true},
-  {"domain":"ddramacafe-tv.bar","name":"DDRamacafe","inAppPlayback":true},
   { domain: "archive.org", name: "Internet Archive", inAppPlayback: true },
   { domain: "justwatch.com", name: "JustWatch", inAppPlayback: false },
   { domain: "reelgood.com", name: "Reelgood", inAppPlayback: false },
@@ -125,16 +123,16 @@ export function providerFor(value: string) {
   return configuredProvider(value)?.provider.name ?? hostname;
 }
 
-export function playableSource(value: string): Pick<DiscoveryResult, "playable" | "playUrl" | "hlsUrl" | "kind"> {
+export function playableSource(value: string): Pick<DiscoveryResult, "playable" | "playUrl" | "hlsUrl" | "kind" | "downloadable" | "downloadUrl" | "detectedBy"> {
   const parsed = new URL(value);
   const configured = configuredProvider(value)?.provider;
   if (!configured?.inAppPlayback) return { playable: false };
 
   if (/\.m3u8$/i.test(parsed.pathname)) {
-    return { playable: true, playUrl: parsed.href, hlsUrl: parsed.href, kind: "hls" };
+    return { playable: true, playUrl: parsed.href, hlsUrl: parsed.href, kind: "hls", detectedBy: "direct_url" };
   }
   if (/\.(mp4|webm|mov|m4v|ogg)$/i.test(parsed.pathname)) {
-    return { playable: true, playUrl: parsed.href, kind: "video" };
+    return { playable: true, playUrl: parsed.href, kind: "video", downloadable: true, downloadUrl: parsed.href, detectedBy: "direct_url" };
   }
 
   const host = hostnameOf(value);

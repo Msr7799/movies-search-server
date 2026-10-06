@@ -96,3 +96,17 @@ Deploy this folder as a Vercel project using the **Other** preset. Configure the
 - نتائج الاشتراكات والتوفر تختلف حسب البلد والحساب؛ يجب أن يفتح المستخدم صفحة المزوّد للتحقق.
 - التشغيل داخل التطبيق لا يُعرض إلا لصيغ فيديو مباشرة مسموحة أو embeds معروفة. صفحات Netflix وShahid وغيرها تفتح في تطبيق/صفحة المزوّد بسبب DRM وسياسات التضمين.
 - لا يمكن لـ CORS وحده حماية API عام يستخدمه تطبيق هاتف؛ الحماية الفعلية هنا هي التحقق، الحدود، Cache، ومخزن Redis الموزع. يمكن إضافة مصادقة مستخدمين لاحقًا إذا أصبح التطبيق قائمًا على حسابات.
+
+## Media discovery pipeline
+
+Search results from configured legal providers pass through a bounded media inspection stage before they are returned to the Android app. The inspector:
+
+- accepts only configured HTTPS provider pages;
+- blocks loopback/private/link-local destinations before server-side fetches;
+- caps redirects, response size, and request duration;
+- detects direct video responses and HLS manifests referenced from HTML/JSON;
+- verifies HLS candidates contain an HLS manifest marker before exposing them as `hlsUrl`;
+- never attempts DRM bypass or key extraction;
+- marks only direct video files as `downloadable` for the Android DownloadManager.
+
+`POST /api/v1/media` can inspect an allowed provider URL entered manually in the app. Search responses and media-inspection responses use the same `playUrl`, `hlsUrl`, `kind`, `downloadable`, and `downloadUrl` fields so the Android client has one playback path.

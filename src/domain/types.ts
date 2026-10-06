@@ -12,6 +12,13 @@ export type DiscoveryResult = {
   playUrl?: string;
   hlsUrl?: string;
   kind?: "video" | "hls" | "embed";
+  downloadable?: boolean;
+  downloadUrl?: string;
+  detectedBy?: "direct_url" | "content_type" | "html_manifest" | "html_media";
+  hlsMaster?: boolean;
+  hlsVariantCount?: number;
+  hlsLive?: boolean;
+  hlsEncrypted?: boolean;
   providerPriority: number;
   confidence: number;
 };

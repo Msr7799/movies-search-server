@@ -3,6 +3,7 @@ import { getPlayableDomains, getProviderDomains, isAllowedProviderUrl } from "..
 import type { ContentType, DiscoveryResponse } from "../domain/types.js";
 import { geminiJson } from "./gemini.js";
 import { makeCandidates, normalizeText, toDiscoveryResult } from "./scoring.js";
+import { enrichDiscoveryResults } from "./media-discovery.js";
 import { tavilySearch } from "./tavily.js";
 
 type SearchInput = {
@@ -110,12 +111,14 @@ export async function searchMovies(input: SearchInput, requestId: string): Promi
     .sort((a, b) => a.providerPriority - b.providerPriority || b.confidence - a.confidence)
     .slice(0, 5);
 
+  const enrichedResults = await enrichDiscoveryResults(results);
+
   return {
     understoodTitle: title,
     ...(original ? { originalTitle: original } : {}),
     ...(understanding.year ? { year: understanding.year } : {}),
     summary: ranking.summary,
-    results,
+    results: enrichedResults,
     meta: { requestId, cached: false, partial, searchedAt: new Date().toISOString() },
   };
 }
