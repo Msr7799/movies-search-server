@@ -2,9 +2,9 @@ export const openApiDocument = {
   openapi: "3.1.0",
   info: {
     title: "Any Movie API",
-    version: "1.2.0",
+    version: "1.3.0",
     description:
-      "Arabic-first legal movie discovery API for web and mobile clients.",
+      "Arabic-first open-web movie media discovery API for web and mobile clients.",
   },
   servers: [{ url: "https://movies-search-server.vercel.app" }],
   paths: {
@@ -16,7 +16,7 @@ export const openApiDocument = {
     },
     "/api/v1/providers": {
       get: {
-        summary: "Supported legal providers",
+        summary: "Discovery mode (open web; no provider allow-list)",
         responses: { "200": { description: "Provider list" } },
       },
     },
@@ -46,17 +46,17 @@ export const openApiDocument = {
     },
     "/api/v1/media": {
       post: {
-        summary: "Inspect an allowed provider URL for direct video or HLS",
+        summary: "Inspect any public HTTPS page for direct video or HLS",
         requestBody: {
           required: true,
-          content: { "application/json": { schema: { type: "object", required: ["url"], properties: { url: { type: "string", format: "uri" }, originUrl: { type: "string", format: "uri", description: "Optional configured playback page that originated an observed media request." } } } } },
+          content: { "application/json": { schema: { type: "object", required: ["url"], properties: { url: { type: "string", format: "uri" }, originUrl: { type: "string", format: "uri", description: "Optional public HTTPS page that originated an observed media request." } } } } },
         },
-        responses: { "200": { description: "Detected media" }, "400": { description: "Unsupported provider or invalid URL" }, "429": { description: "Rate limited" } },
+        responses: { "200": { description: "Detected media" }, "400": { description: "Invalid or unsafe URL" }, "429": { description: "Rate limited" } },
       },
     },
     "/api/v1/search": {
       post: {
-        summary: "Identify a title and rank legal viewing sources",
+        summary: "Identify a title, search the open web, and return verified playable media",
         requestBody: {
           required: true,
           content: {
@@ -78,7 +78,7 @@ export const openApiDocument = {
           "200": { description: "Ranked discovery response" },
           "400": { description: "Invalid request" },
           "429": { description: "Rate limited" },
-          "502": { description: "Upstream provider failure" },
+          "502": { description: "Upstream search/crawl failure" },
         },
       },
     },

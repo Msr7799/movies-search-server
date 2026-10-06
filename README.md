@@ -1,112 +1,51 @@
-# Any Movie Server
+# Any Movie Server 1.3.0
 
-باك إند مستقل وآمن للبحث الذكي عن الأفلام ومصادر العرض القانونية، مصمم لـ Vercel وللتكامل مع `any-movie-web` وتطبيق Android لاحقًا.
+خادم بحث واكتشاف وسائط عام للتطبيق. البحث لم يعد مربوطًا بقائمة مزودين أو دومينات محددة.
 
-## ما الذي يقدمه؟
+## مسار البحث
 
-- فصل كامل بين مفتاح Gemini للبحث ومفتاح Gemini للاقتراحات التلقائية.
-- خط بحث متعدد المراحل: فهم العنوان، توليد استعلامات محدودة، بحث Tavily متوازٍ، فلترة نطاقات قانونية، إزالة التكرار، ترتيب خوارزمي، ثم ترتيب Gemini موثّق بالنتائج الفعلية.
-- استهلاك محافظ للخطة المجانية: Cache طويل، نموذج Flash-Lite افتراضي، بحث Tavily أساسي افتراضي، ومحاولات إعادة قصيرة فقط للأخطاء المؤقتة.
-- Rate limiting موزع وCache موزع عند إضافة Upstash Redis، مع fallback محلي أثناء التطوير.
-- Validation صارم، حد لحجم الطلب، CORS allowlist، Security Headers، Request IDs، رسائل أخطاء عامة لا تكشف المفاتيح أو تفاصيل المزوّد.
-- OpenAPI ووظائف Health وProviders ومسارات توافق مع الموقع القديم.
-- لا يبحث في مواقع التورنت أو النسخ المقرصنة ولا يتجاوز DRM. الروابط إما رسمية أو مرخّصة أو مكتبات/أرشيفات عامة قانونية.
+1. يفهم Gemini عنوان الفيلم واللغة/السنة.
+2. Tavily Search يبحث في الويب العام بدون `include_domains`.
+3. أفضل الصفحات تمر عبر فاحص وسائط محدود وآمن.
+4. الفاحص يبحث في HTML/JSON و`video/source` وiframes وصفحات player القريبة عن HLS/M3U8 أو فيديو مباشر.
+5. إذا لم تكفِ نتائج البحث المباشر، يستخدم الخادم Tavily Crawl بشكل محدود على أفضل النتائج لاكتشاف صفحات داخل الموقع نفسه ثم يفحصها محليًا.
+6. لا يرجع التطبيق إلا نتيجة تم التحقق أن لها `playUrl` أو `hlsUrl`.
 
-## المسارات
+لا يوجد Provider allow-list. يبقى اسم `provider` في JSON فقط للتوافق مع التطبيق، وقيمته الآن اسم المضيف الذي جاءت منه الصفحة.
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/api` | معلومات الخدمة |
-| `GET` | `/api/openapi` | عقد OpenAPI |
-| `GET` | `/api/v1/health` | جاهزية الخدمات بدون كشف الأسرار |
-| `GET` | `/api/v1/providers` | قائمة المزوّدين المسموحين |
-| `POST` | `/api/v1/suggestions` | اقتراحات العناوين بمفتاح AI المعزول |
-| `POST` | `/api/v1/search` | البحث الكامل وترتيب روابط العرض القانونية |
-| `POST` | `/api/suggest` | توافق مع `any-movie-web` الحالي |
-| `POST` | `/api/discover` | توافق مع `any-movie-web` الحالي |
+## الحماية
 
-### مثال بحث
+- HTTPS عام فقط.
+- حظر loopback/private/link-local وDNS destinations غير العامة قبل fetch.
+- حدود صارمة للمهلة، الحجم، redirects، عدد الصفحات وعمق الزحف.
+- لا يوجد تجاوز لتسجيل الدخول أو paywalls أو DRM ولا استخراج مفاتيح تشفير.
+- الملف المباشر فقط يعلّم `downloadable=true`; HLS لا يتحول تلقائيًا لتنزيل إذا لم يكن ملفًا مباشرًا.
 
-```bash
-curl -X POST "https://YOUR-PROJECT.vercel.app/api/v1/search" \
-  -H "Content-Type: application/json" \
-  -d '{"query":"ديفداس","movieLanguage":"hi","subtitleLanguage":"ar","allowShortClips":false}'
-```
+## متغيرات البيئة
 
-صيغة النجاح تحافظ على حقول الموقع الحالية (`understoodTitle`, `year`, `summary`, `results`) وتضيف `originalTitle`, `confidence`, و`meta`. كل خطأ يعاد بهذه الصيغة:
+المطلوب:
 
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "رسالة آمنة للمستخدم",
-    "requestId": "..."
-  }
-}
-```
+- `TAVILY_API_KEY`
+- `GEMINI_API_KEY`
+- `GEMINI_AUTO_SUGGESTED_API_KEY`
 
-## الإعداد المحلي (بدون تشغيل السيرفر)
+مفيد للإنتاج:
 
-المشروع يستخدم `pnpm` فقط:
+- `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`
+- `TAVILY_SEARCH_DEPTH=advanced` لتحسين جودة البحث عند توفر الرصيد
+- `TAVILY_MAX_RESULTS=10`
+- `TAVILY_CRAWL_ROOTS=1`
+- `TAVILY_CRAWL_LIMIT=5`
 
-```bash
-pnpm install
-pnpm check
-```
+لإيقاف Tavily Crawl والإبقاء على Search + فحص HTML فقط، ضع `TAVILY_CRAWL_ROOTS=0`.
 
-للتحقق من صلاحية المفاتيح الثلاثة مباشرة (يستهلك طلب اختبار صغير من كل مزود ولا يعرض الأسرار أو نصوص الرد):
+## Endpoints
 
-```bash
-pnpm smoke:providers
-```
+- `POST /api/v1/search` بحث عام ثم اكتشاف وسائط
+- `POST /api/v1/media` فحص أي رابط HTTPS عام أو التحقق من media request التقطه WebView
+- `GET /api/v1/providers` يعاد للتوافق فقط ويعطي `mode: open_web` وقائمة فارغة
+- `GET /api/v1/health` حالة المفاتيح/الخدمات
 
-انسخ `.env.example` إلى `.env` محليًا وأضف القيم. ملف `.env` مستبعد من Git. لا تضع أي مفتاح داخل تطبيق الويب أو Android ولا تستخدم بادئة `NEXT_PUBLIC_`.
+## ملاحظة عن الصفحات الديناميكية
 
-## الرفع إلى Vercel
-
-1. أنشئ Git repository لهذا المجلد أو ارفعه داخل مستودع وحدد **Root Directory** إلى `any-movie-server`.
-2. من Vercel اختر **Add New → Project** واربط المستودع.
-3. اترك Framework Preset على **Other**؛ يثبت `vercel.json` الإعداد على `framework: null` ويحدد `public` كمخرج ثابت، بينما يكتشف Vercel ملفات TypeScript داخل `api/` كـ Node.js Functions.
-4. أضف في **Settings → Environment Variables** القيم المطلوبة:
-   - `TAVILY_API_KEY`
-   - `GEMINI_API_KEY`
-   - `GEMINI_AUTO_SUGGESTED_API_KEY`
-   - `ALLOWED_ORIGINS=https://YOUR-WEB-APP.vercel.app`
-5. أضف الإعدادات الاختيارية من `.env.example`. ابدأ بـ `TAVILY_SEARCH_DEPTH=basic` للمحافظة على الرصيد.
-6. يوصى بإنشاء قاعدة Upstash Redis مجانية وإضافة `UPSTASH_REDIS_REST_URL` و`UPSTASH_REDIS_REST_TOKEN`. بدونها يبقى السيرفر عاملًا، لكن Cache وRate Limit سيكونان لكل نسخة Function فقط.
-7. نفّذ Deploy، ثم افتح `/api/v1/health`. يجب أن تكون `status` بقيمة `ready`. لا تُرجع Health أي قيمة سرية.
-8. اختبر `/api/v1/suggestions` ثم `/api/v1/search`. راجع `X-Request-Id` عند تتبع خطأ في Vercel Logs.
-
-بعد تغيير متغير بيئة في Vercel يجب تنفيذ Redeploy حتى يصل إلى النسخة المنشورة.
-
-## ربط الويب لاحقًا
-
-المساران `/api/discover` و`/api/suggest` موجودان لتقليل تغييرات الموقع. عند نشر الخادم على نطاق مستقل سيحتاج الويب إلى متغير عام واحد لعنوان الباك إند فقط، مثل `NEXT_PUBLIC_API_BASE_URL`; مفاتيح Gemini وTavily تبقى في مشروع الخادم ولا تُنقل إلى الواجهة.
-
-## English deployment summary
-
-### Ordered providers and HLS
-
-Set `PROVIDERS` to a JSON array of `{ "domain", "name", "inAppPlayback" }` objects. Array order is the search and response priority; the first provider is priority 1. The server reads `inAppPlayback` separately for every provider: use `true` for official embeds or direct public streams and `false` for protected/DRM providers. `GET /api/v1/providers` returns the active order and values. When an allowed result is already a direct HTTPS `.m3u8` URL on an enabled provider, the search response returns both `playUrl` and `hlsUrl` with `kind: "hls"`. Protected providers remain external links; the server does not extract or bypass protected streams.
-
-Deploy this folder as a Vercel project using the **Other** preset. Configure the three required server-only API keys and `ALLOWED_ORIGINS`. Add Upstash Redis for distributed caching and rate limiting across serverless instances. Validate `/api/v1/health`, then test suggestions and search. Never ship provider credentials in web or mobile builds.
-
-## حدود مقصودة
-
-- نتائج الاشتراكات والتوفر تختلف حسب البلد والحساب؛ يجب أن يفتح المستخدم صفحة المزوّد للتحقق.
-- التشغيل داخل التطبيق لا يُعرض إلا لصيغ فيديو مباشرة مسموحة أو embeds معروفة. صفحات Netflix وShahid وغيرها تفتح في تطبيق/صفحة المزوّد بسبب DRM وسياسات التضمين.
-- لا يمكن لـ CORS وحده حماية API عام يستخدمه تطبيق هاتف؛ الحماية الفعلية هنا هي التحقق، الحدود، Cache، ومخزن Redis الموزع. يمكن إضافة مصادقة مستخدمين لاحقًا إذا أصبح التطبيق قائمًا على حسابات.
-
-## Media discovery pipeline
-
-Search results from configured legal providers pass through a bounded media inspection stage before they are returned to the Android app. The inspector:
-
-- accepts only configured HTTPS provider pages;
-- blocks loopback/private/link-local destinations before server-side fetches;
-- caps redirects, response size, and request duration;
-- detects direct video responses and HLS manifests referenced from HTML/JSON;
-- verifies HLS candidates contain an HLS manifest marker before exposing them as `hlsUrl`;
-- never attempts DRM bypass or key extraction;
-- marks only direct video files as `downloadable` for the Android DownloadManager.
-
-`POST /api/v1/media` can inspect an allowed provider URL entered manually in the app. It also accepts an optional `originUrl` when the Android WebView observes a likely media request; the server re-validates the configured origin and the candidate before returning it. Search responses and media-inspection responses use the same `playUrl`, `hlsUrl`, `kind`, `downloadable`, and `downloadUrl` fields so the Android client has one playback path.
+الفحص السيرفري يستطيع اكتشاف manifests الموجودة في HTML/JSON والiframes والصفحات القريبة. إذا كان الموقع لا ينشئ رابط HLS إلا بعد JavaScript/interaction، WebView داخل تطبيق Android يراقب طلبات `m3u8/hls/playlist/manifest` أثناء تشغيل الصفحة ويرسل المرشح إلى `/api/v1/media` للتحقق ثم يحوله إلى Media3 عند نجاح الفحص.

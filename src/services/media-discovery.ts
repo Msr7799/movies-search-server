@@ -1,17 +1,18 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import { isAllowedProviderUrl, isPlayableProviderUrl, playableSource } from "../domain/providers.js";
+import { playableSource } from "../domain/providers.js";
 import type { DiscoveryResult } from "../domain/types.js";
 
-const MAX_PAGE_BYTES = 900 * 1024;
-const MAX_MANIFEST_BYTES = 320 * 1024;
-const PAGE_TIMEOUT_MS = 6_500;
-const MEDIA_TIMEOUT_MS = 5_000;
+const MAX_PAGE_BYTES = 1_100 * 1024;
+const MAX_MANIFEST_BYTES = 360 * 1024;
+const PAGE_TIMEOUT_MS = 5_000;
+const MEDIA_TIMEOUT_MS = 4_000;
 const MAX_REDIRECTS = 3;
+const MAX_CRAWL_DEPTH = 1;
+const MAX_CRAWL_PAGES = 4;
 
-type ExtractedMedia = { hls: string[]; video: string[]; audio: string[] };
+type ExtractedMedia = { hls: string[]; video: string[]; audio: string[]; pages: string[] };
 type FetchTextResult = { url: string; contentType: string; text: string };
-
 type HlsInfo = ReturnType<typeof analyzeHlsManifest>;
 
 function privateIpv4(address: string) {
@@ -34,7 +35,7 @@ function privateIp(address: string) {
   return mapped ? privateIpv4(mapped) : false;
 }
 
-async function assertPublicHttpsUrl(value: string) {
+export async function assertPublicHttpsUrl(value: string) {
   const parsed = new URL(value);
   if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port) throw new Error("UNSAFE_MEDIA_URL");
   const hostname = parsed.hostname.toLowerCase();
@@ -70,12 +71,11 @@ async function readTextLimited(response: Response, maxBytes: number) {
 
 async function fetchPublicText(
   initialUrl: string,
-  options: { maxBytes: number; timeoutMs: number; requireProvider: boolean; referer?: string },
+  options: { maxBytes: number; timeoutMs: number; referer?: string },
 ): Promise<FetchTextResult> {
   let current = initialUrl;
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
     await assertPublicHttpsUrl(current);
-    if (options.requireProvider && !isAllowedProviderUrl(current)) throw new Error("PROVIDER_REDIRECT_BLOCKED");
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), options.timeoutMs);
     try {
@@ -84,8 +84,8 @@ async function fetchPublicText(
         redirect: "manual",
         signal: controller.signal,
         headers: {
-          Accept: "text/html,application/xhtml+xml,application/json,application/vnd.apple.mpegurl,application/x-mpegURL,video/*;q=0.9,*/*;q=0.5",
-          "User-Agent": "AnyMovieMediaProbe/1.2",
+          Accept: "text/html,application/xhtml+xml,application/json,text/plain,application/vnd.apple.mpegurl,application/x-mpegURL,video/*;q=0.9,audio/*;q=0.8,*/*;q=0.4",
+          "User-Agent": "AnyMovieOpenWebProbe/1.3",
           ...(options.referer ? { Referer: options.referer } : {}),
         },
       });
@@ -122,10 +122,11 @@ function decodeMarkup(value: string) {
     .replace(/&#47;/g, "/");
 }
 
-function safeResolvedMediaUrl(value: string, baseUrl: string) {
+function safeResolvedUrl(value: string, baseUrl: string) {
   try {
     const parsed = new URL(decodeMarkup(value.trim()), baseUrl);
-    if (parsed.protocol !== "https:" || parsed.username || parsed.password) return undefined;
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port) return undefined;
+    parsed.hash = "";
     return parsed.href;
   } catch {
     return undefined;
@@ -145,13 +146,18 @@ export function extractMediaCandidates(markup: string, baseUrl: string): Extract
   const hls = new Set<string>();
   const video = new Set<string>();
   const audio = new Set<string>();
+  const pages = new Set<string>();
   const add = (raw: string, forced?: "hls" | "video" | "audio") => {
-    const value = safeResolvedMediaUrl(raw, baseUrl);
+    const value = safeResolvedUrl(raw, baseUrl);
     if (!value) return;
     const kind = forced ?? mediaKind(value);
     if (kind === "hls") hls.add(value);
     else if (kind === "video") video.add(value);
     else if (kind === "audio") audio.add(value);
+  };
+  const addPage = (raw: string) => {
+    const value = safeResolvedUrl(raw, baseUrl);
+    if (value && value !== baseUrl) pages.add(value);
   };
 
   const quoted = /["']([^"'<>\s]+?\.(?:m3u8|mp4|webm|m4v|mov|ogv|ogg|m4a|mp3|aac|wav|flac|oga)(?:\?[^"'<>\s]*)?)["']/gi;
@@ -165,6 +171,9 @@ export function extractMediaCandidates(markup: string, baseUrl: string): Extract
 
   const namedVideo = /["'](?:video(?:url)?|progressive(?:url)?|file|src)["']\s*[:=]\s*["']([^"']+\.(?:mp4|webm|m4v|mov|ogv|ogg)(?:\?[^"']*)?)["']/gi;
   for (const match of text.matchAll(namedVideo)) if (match[1]) add(match[1], "video");
+
+  const namedPage = /["'](?:embed(?:url)?|player(?:url)?|iframe(?:url)?)["']\s*[:=]\s*["']([^"']+)["']/gi;
+  for (const match of text.matchAll(namedPage)) if (match[1]) addPage(match[1]);
 
   const sourceTags = /<(?:source|video|audio)\b[^>]*>/gi;
   for (const tagMatch of text.matchAll(sourceTags)) {
@@ -183,7 +192,21 @@ export function extractMediaCandidates(markup: string, baseUrl: string): Extract
     if (content) add(content);
   }
 
-  return { hls: [...hls].slice(0, 12), video: [...video].slice(0, 12), audio: [...audio].slice(0, 8) };
+  const iframes = /<iframe\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
+  for (const match of text.matchAll(iframes)) if (match[1]) addPage(match[1]);
+
+  const anchors = /<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi;
+  for (const match of text.matchAll(anchors)) {
+    const href = match[1];
+    if (href && /(?:watch|player|embed|stream|video|play|server)/i.test(href)) addPage(href);
+  }
+
+  return {
+    hls: [...hls].slice(0, 16),
+    video: [...video].slice(0, 12),
+    audio: [...audio].slice(0, 8),
+    pages: [...pages].slice(0, 10),
+  };
 }
 
 export function analyzeHlsManifest(text: string) {
@@ -211,14 +234,26 @@ async function inspectHls(url: string, referer?: string) {
     const response = await fetchPublicText(url, {
       maxBytes: MAX_MANIFEST_BYTES,
       timeoutMs: MEDIA_TIMEOUT_MS,
-      requireProvider: false,
       ...(referer ? { referer } : {}),
     });
     const info = analyzeHlsManifest(response.text);
     const verified = info.valid || response.contentType.includes("mpegurl");
-    return { verified, info };
+    return { verified, url: response.url, info };
   } catch {
-    return { verified: false, info: analyzeHlsManifest("") };
+    return { verified: false, url, info: analyzeHlsManifest("") };
+  }
+}
+
+async function inspectVideo(url: string, referer?: string) {
+  try {
+    const response = await fetchPublicText(url, {
+      maxBytes: 32 * 1024,
+      timeoutMs: MEDIA_TIMEOUT_MS,
+      ...(referer ? { referer } : {}),
+    });
+    return { verified: response.contentType.startsWith("video/"), url: response.url };
+  } catch {
+    return { verified: false, url };
   }
 }
 
@@ -233,7 +268,7 @@ function hlsInfoPatch(info: HlsInfo): Partial<DiscoveryResult> {
   };
 }
 
-function directDownloadPatch(source: ReturnType<typeof playableSource>) {
+function directPatch(source: ReturnType<typeof playableSource>) {
   if (source.playable && source.kind === "video" && source.playUrl) {
     return { downloadable: true, downloadUrl: source.playUrl, detectedBy: "direct_url" as const };
   }
@@ -241,142 +276,38 @@ function directDownloadPatch(source: ReturnType<typeof playableSource>) {
   return {};
 }
 
-function hostnameOf(value: string) {
-  return new URL(value).hostname.toLowerCase().replace(/^www\./, "");
-}
+async function discoverPage(
+  pageUrl: string,
+  state: { visited: Set<string>; pages: number },
+  depth: number,
+  referer?: string,
+): Promise<Partial<DiscoveryResult>> {
+  if (depth > MAX_CRAWL_DEPTH || state.pages >= MAX_CRAWL_PAGES || state.visited.has(pageUrl)) return { playable: false };
+  state.visited.add(pageUrl);
+  state.pages += 1;
 
-function matches(host: string, domain: string) {
-  return host === domain || host.endsWith(`.${domain}`);
-}
-
-function vimeoId(value: string) {
-  const parsed = new URL(value);
-  return parsed.pathname.match(/\/(?:video\/)?(\d+)/)?.[1];
-}
-
-async function discoverVimeo(pageUrl: string): Promise<Partial<DiscoveryResult> | undefined> {
-  const id = vimeoId(pageUrl);
-  if (!id) return undefined;
-  try {
-    const configUrl = `https://player.vimeo.com/video/${encodeURIComponent(id)}/config`;
-    const response = await fetchPublicText(configUrl, { maxBytes: MAX_PAGE_BYTES, timeoutMs: PAGE_TIMEOUT_MS, requireProvider: true, referer: pageUrl });
-    const json = JSON.parse(response.text) as Record<string, any>;
-    const files = json.request?.files;
-    const cdns = files?.hls?.cdns && typeof files.hls.cdns === "object" ? Object.values(files.hls.cdns) as Array<any> : [];
-    const hlsUrl = cdns.map((item) => typeof item?.url === "string" ? item.url : "").find(Boolean);
-    const progressive = Array.isArray(files?.progressive) ? files.progressive : [];
-    const direct = progressive
-      .filter((item: any) => typeof item?.url === "string" && item.url.startsWith("https://"))
-      .sort((a: any, b: any) => Number(b?.height ?? 0) - Number(a?.height ?? 0))[0]?.url as string | undefined;
-    if (hlsUrl) {
-      const inspected = await inspectHls(hlsUrl, pageUrl);
-      if (inspected.verified) return {
-        playable: true, playUrl: hlsUrl, hlsUrl, kind: "hls", detectedBy: "provider_api",
-        ...(direct ? { downloadable: true, downloadUrl: direct } : {}),
-        ...hlsInfoPatch(inspected.info),
-      };
-    }
-    if (direct) return { playable: true, playUrl: direct, kind: "video", downloadable: true, downloadUrl: direct, detectedBy: "provider_api" };
-  } catch {
-    return undefined;
-  }
-  return undefined;
-}
-
-function dailymotionId(value: string) {
-  const parsed = new URL(value);
-  return parsed.pathname.match(/\/(?:video|embed\/video)\/([^_/?]+)/)?.[1];
-}
-
-async function discoverDailymotion(pageUrl: string): Promise<Partial<DiscoveryResult> | undefined> {
-  const id = dailymotionId(pageUrl);
-  if (!id) return undefined;
-  try {
-    const metadataUrl = `https://www.dailymotion.com/player/metadata/video/${encodeURIComponent(id)}`;
-    const response = await fetchPublicText(metadataUrl, { maxBytes: MAX_PAGE_BYTES, timeoutMs: PAGE_TIMEOUT_MS, requireProvider: true, referer: pageUrl });
-    const json = JSON.parse(response.text) as Record<string, any>;
-    const qualities = json.qualities && typeof json.qualities === "object" ? json.qualities as Record<string, Array<any>> : {};
-    const streams = Object.entries(qualities).flatMap(([quality, entries]) => Array.isArray(entries) ? entries.map((entry) => ({ quality, ...entry })) : []);
-    const hls = streams.find((entry: any) => typeof entry?.url === "string" && (String(entry?.type).toLowerCase().includes("mpegurl") || entry.url.includes(".m3u8")))?.url as string | undefined;
-    const direct = streams
-      .filter((entry: any) => typeof entry?.url === "string" && /^https:\/\//.test(entry.url) && String(entry?.type).toLowerCase().startsWith("video/mp4"))
-      .sort((a: any, b: any) => Number.parseInt(String(b.quality), 10) - Number.parseInt(String(a.quality), 10))[0]?.url as string | undefined;
-    if (hls) {
-      const inspected = await inspectHls(hls, pageUrl);
-      if (inspected.verified) return {
-        playable: true, playUrl: hls, hlsUrl: hls, kind: "hls", detectedBy: "provider_api",
-        ...(direct ? { downloadable: true, downloadUrl: direct } : {}),
-        ...hlsInfoPatch(inspected.info),
-      };
-    }
-    if (direct) return { playable: true, playUrl: direct, kind: "video", downloadable: true, downloadUrl: direct, detectedBy: "provider_api" };
-  } catch {
-    return undefined;
-  }
-  return undefined;
-}
-
-function archiveId(value: string) {
-  return new URL(value).pathname.match(/^\/(?:details|embed)\/([^/?]+)/)?.[1];
-}
-
-function archiveFileUrl(id: string, name: string) {
-  const path = name.split("/").map((part) => encodeURIComponent(part)).join("/");
-  return `https://archive.org/download/${encodeURIComponent(id)}/${path}`;
-}
-
-async function discoverArchive(pageUrl: string): Promise<Partial<DiscoveryResult> | undefined> {
-  const id = archiveId(pageUrl);
-  if (!id) return undefined;
-  try {
-    const metadataUrl = `https://archive.org/metadata/${encodeURIComponent(id)}`;
-    const response = await fetchPublicText(metadataUrl, { maxBytes: MAX_PAGE_BYTES, timeoutMs: PAGE_TIMEOUT_MS, requireProvider: true, referer: pageUrl });
-    const json = JSON.parse(response.text) as { files?: Array<Record<string, unknown>> };
-    const files = Array.isArray(json.files) ? json.files : [];
-    const candidates = files.flatMap((file) => {
-      const name = typeof file.name === "string" ? file.name : "";
-      if (!/\.(?:mp4|m4v|webm)$/i.test(name)) return [];
-      const size = Number(file.size ?? 0);
-      const source = typeof file.source === "string" ? file.source : "";
-      const format = typeof file.format === "string" ? file.format : "";
-      return [{ name, size: Number.isFinite(size) ? size : 0, source, format }];
-    }).sort((a, b) => (b.source === "original" ? 1 : 0) - (a.source === "original" ? 1 : 0) || b.size - a.size);
-    const best = candidates[0];
-    if (!best) return undefined;
-    const direct = archiveFileUrl(id, best.name);
-    return { playable: true, playUrl: direct, kind: "video", downloadable: true, downloadUrl: direct, detectedBy: "provider_api" };
-  } catch {
-    return undefined;
-  }
-}
-
-async function providerSpecificDiscovery(pageUrl: string) {
-  const host = hostnameOf(pageUrl);
-  if (matches(host, "vimeo.com")) return discoverVimeo(pageUrl);
-  if (matches(host, "dailymotion.com")) return discoverDailymotion(pageUrl);
-  if (matches(host, "archive.org")) return discoverArchive(pageUrl);
-  return undefined;
-}
-
-export async function discoverPlayableMedia(pageUrl: string): Promise<Partial<DiscoveryResult>> {
   const direct = playableSource(pageUrl);
-  const directPatch = directDownloadPatch(direct);
   if (direct.playable && direct.kind === "hls" && direct.hlsUrl) {
-    const inspected = await inspectHls(direct.hlsUrl, pageUrl);
-    return { ...direct, ...directPatch, ...(inspected.verified ? hlsInfoPatch(inspected.info) : {}) };
+    const inspected = await inspectHls(direct.hlsUrl, referer ?? pageUrl);
+    if (inspected.verified) return {
+      ...direct,
+      playUrl: inspected.url,
+      hlsUrl: inspected.url,
+      ...directPatch(direct),
+      ...hlsInfoPatch(inspected.info),
+    };
   }
-  if (direct.playable && direct.kind !== "embed") return { ...direct, ...directPatch };
-  if (!isAllowedProviderUrl(pageUrl)) return { ...direct, ...directPatch };
-
-  const specific = await providerSpecificDiscovery(pageUrl);
-  if (specific?.playable) return specific;
-
-  const host = hostnameOf(pageUrl);
-  const probeUsefulEmbed = direct.kind === "embed" && (matches(host, "vimeo.com") || matches(host, "archive.org") || matches(host, "dailymotion.com"));
-  if (direct.playable && direct.kind === "embed" && !probeUsefulEmbed) return { ...direct, ...directPatch };
+  if (direct.playable && direct.kind === "video" && direct.playUrl) {
+    const inspected = await inspectVideo(direct.playUrl, referer);
+    if (inspected.verified) return { ...direct, playUrl: inspected.url, downloadUrl: inspected.url, ...directPatch(direct) };
+  }
 
   try {
-    const page = await fetchPublicText(pageUrl, { maxBytes: MAX_PAGE_BYTES, timeoutMs: PAGE_TIMEOUT_MS, requireProvider: true });
+    const page = await fetchPublicText(pageUrl, {
+      maxBytes: MAX_PAGE_BYTES,
+      timeoutMs: PAGE_TIMEOUT_MS,
+      ...(referer ? { referer } : {}),
+    });
     if (page.contentType.includes("mpegurl") || page.text.trimStart().startsWith("#EXTM3U")) {
       const info = analyzeHlsManifest(page.text);
       return { playable: true, playUrl: page.url, hlsUrl: page.url, kind: "hls", detectedBy: "content_type", ...hlsInfoPatch(info) };
@@ -386,31 +317,39 @@ export async function discoverPlayableMedia(pageUrl: string): Promise<Partial<Di
     }
 
     const extracted = extractMediaCandidates(page.text, page.url);
-    const verifiedHls = await Promise.all(extracted.hls.slice(0, 4).map(async (hlsUrl) => ({ hlsUrl, inspected: await inspectHls(hlsUrl, page.url) })));
-    const hls = verifiedHls.find((item) => item.inspected.verified);
-    if (hls) {
-      return {
-        playable: true,
-        playUrl: hls.hlsUrl,
-        hlsUrl: hls.hlsUrl,
-        kind: "hls",
-        detectedBy: "html_manifest",
-        ...hlsInfoPatch(hls.inspected.info),
-      };
-    }
-    const videoUrl = extracted.video[0];
-    if (videoUrl) {
-      await assertPublicHttpsUrl(videoUrl);
-      return { playable: true, playUrl: videoUrl, kind: "video", downloadable: true, downloadUrl: videoUrl, detectedBy: "html_media" };
-    }
+    const hlsChecks = await Promise.all(extracted.hls.slice(0, 6).map(async (hlsUrl) => inspectHls(hlsUrl, page.url)));
+    const hls = hlsChecks.find((item) => item.verified);
+    if (hls) return {
+      playable: true,
+      playUrl: hls.url,
+      hlsUrl: hls.url,
+      kind: "hls",
+      detectedBy: "html_manifest",
+      ...hlsInfoPatch(hls.info),
+    };
+
+    const videoChecks = await Promise.all(extracted.video.slice(0, 4).map(async (videoUrl) => inspectVideo(videoUrl, page.url)));
+    const video = videoChecks.find((item) => item.verified);
+    if (video) return { playable: true, playUrl: video.url, kind: "video", downloadable: true, downloadUrl: video.url, detectedBy: "html_media" };
+
+    const nestedResults = await Promise.all(
+      extracted.pages.slice(0, 3).map((nested) => discoverPage(nested, state, depth + 1, page.url)),
+    );
+    const nestedPlayable = nestedResults.find((item) => item.playable);
+    if (nestedPlayable) return nestedPlayable;
   } catch {
-    // Preserve a trusted embed fallback if probing is unavailable.
+    return { playable: false };
   }
-  return { ...direct, ...directPatch };
+  return { playable: false };
+}
+
+export async function discoverPlayableMedia(pageUrl: string): Promise<Partial<DiscoveryResult>> {
+  await assertPublicHttpsUrl(pageUrl);
+  return discoverPage(pageUrl, { visited: new Set<string>(), pages: 0 }, 0);
 }
 
 export async function discoverObservedMedia(candidateUrl: string, originUrl: string): Promise<Partial<DiscoveryResult>> {
-  if (!isPlayableProviderUrl(originUrl)) return { playable: false };
+  await assertPublicHttpsUrl(originUrl);
   await assertPublicHttpsUrl(candidateUrl);
   const parsed = new URL(candidateUrl);
   const pathname = parsed.pathname.toLowerCase();
@@ -419,19 +358,41 @@ export async function discoverObservedMedia(candidateUrl: string, originUrl: str
     const inspected = await inspectHls(candidateUrl, originUrl);
     if (inspected.verified) return {
       playable: true,
-      playUrl: candidateUrl,
-      hlsUrl: candidateUrl,
+      playUrl: inspected.url,
+      hlsUrl: inspected.url,
       kind: "hls",
       detectedBy: "webview_observed",
       ...hlsInfoPatch(inspected.info),
     };
   }
   if (/\.(?:mp4|webm|m4v|mov|ogv|ogg)$/i.test(pathname)) {
-    return { playable: true, playUrl: candidateUrl, kind: "video", downloadable: true, downloadUrl: candidateUrl, detectedBy: "webview_observed" };
+    const inspected = await inspectVideo(candidateUrl, originUrl);
+    if (inspected.verified) return { playable: true, playUrl: inspected.url, kind: "video", downloadable: true, downloadUrl: inspected.url, detectedBy: "webview_observed" };
   }
   return { playable: false };
 }
 
+async function mapLimit<T, R>(values: T[], limit: number, worker: (value: T) => Promise<R>) {
+  const output = new Array<R>(values.length);
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, values.length) }, async () => {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= values.length) return;
+      output[index] = await worker(values[index]!);
+    }
+  });
+  await Promise.all(runners);
+  return output;
+}
+
 export async function enrichDiscoveryResults(results: DiscoveryResult[]) {
-  return Promise.all(results.map(async (result) => ({ ...result, ...(await discoverPlayableMedia(result.url)) })));
+  return mapLimit(results, 4, async (result) => {
+    try {
+      return { ...result, ...(await discoverPlayableMedia(result.url)) };
+    } catch {
+      return { ...result, playable: false };
+    }
+  });
 }

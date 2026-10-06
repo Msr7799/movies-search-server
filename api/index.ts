@@ -2,7 +2,7 @@ import { endpoint } from "../src/http/handler.js";
 
 export default endpoint(["GET"], (_request, context) => ({
   name: "Any Movie API",
-  version: "1.1.0",
+  version: "1.3.0",
   status: "ok",
   documentation: "/api/openapi",
   endpoints: {

@@ -47,6 +47,15 @@ export const config = {
       ? ("advanced" as const)
       : ("basic" as const);
   },
+  get tavilyMaxResults() {
+    return integer("TAVILY_MAX_RESULTS", 10, 5, 20);
+  },
+  get tavilyCrawlLimit() {
+    return integer("TAVILY_CRAWL_LIMIT", 5, 2, 10);
+  },
+  get tavilyCrawlRoots() {
+    return integer("TAVILY_CRAWL_ROOTS", 1, 0, 4);
+  },
   get region() {
     return (process.env.APP_REGION || "Bahrain").slice(0, 80);
   },

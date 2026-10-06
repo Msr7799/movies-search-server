@@ -1,6 +1,6 @@
 {
   "name": "any-movie-server",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
   "description": "Production-ready movie discovery API for Vercel",

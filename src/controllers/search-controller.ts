@@ -3,7 +3,6 @@ import type { VercelRequest } from "@vercel/node";
 import { z } from "zod";
 import { config } from "../config.js";
 import { MOVIE_LANGUAGES, SUBTITLE_LANGUAGES } from "../domain/options.js";
-import { getProviderConfigSignature } from "../domain/providers.js";
 import type { DiscoveryResponse } from "../domain/types.js";
 import { cacheGet, cacheSet } from "../infrastructure/store.js";
 import { enforceRateLimit } from "../infrastructure/rate-limit.js";
@@ -23,8 +22,8 @@ export async function searchController(request: VercelRequest, context: RequestC
   const input = parseBody(request, schema);
   await enforceRateLimit("search", context.ip, config.searchLimit, 600);
   const normalized = { ...input, query: input.query.toLocaleLowerCase().normalize("NFKC") };
-  const hash = createHash("sha256").update(JSON.stringify({ ...normalized, providers: getProviderConfigSignature() })).digest("hex");
-  const cacheKey = `search:v5:${hash}`;
+  const hash = createHash("sha256").update(JSON.stringify({ ...normalized, discovery: "open-web-v2" })).digest("hex");
+  const cacheKey = `search:v6:${hash}`;
   const cached = await cacheGet<DiscoveryResponse>(cacheKey);
   if (cached) return { ...cached, meta: { ...cached.meta, requestId: context.requestId, cached: true } };
 

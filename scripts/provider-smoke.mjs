@@ -20,7 +20,7 @@ async function tavily() {
   const response = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.TAVILY_API_KEY}` },
-    body: JSON.stringify({ query: "Internet Archive public domain films", search_depth: "basic", max_results: 1, include_domains: ["archive.org"] }),
+    body: JSON.stringify({ query: "Internet Archive public domain films", search_depth: "basic", max_results: 1 }),
     signal: AbortSignal.timeout(30_000),
   });
   return { service: "tavily", ok: response.ok, status: response.status };
