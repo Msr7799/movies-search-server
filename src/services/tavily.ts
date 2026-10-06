@@ -18,12 +18,12 @@ async function tavilyPost(path: string, body: Record<string, unknown>, timeoutMs
   });
 }
 
-export async function tavilySearch(query: string): Promise<TavilyResult[]> {
+export async function tavilySearch(query: string, maxResults = config.tavilyMaxResults): Promise<TavilyResult[]> {
   const payload = await tavilyPost("/search", {
     query: query.slice(0, 390),
     topic: "general",
     search_depth: config.tavilyDepth,
-    max_results: config.tavilyMaxResults,
+    max_results: Math.max(5, Math.min(20, config.tavilyMaxResults, maxResults)),
     include_answer: false,
     include_raw_content: false,
     include_favicon: false,

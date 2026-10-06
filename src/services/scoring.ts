@@ -60,7 +60,7 @@ export function makeCandidates(results: TavilyResult[], knownTitles: string[]) {
       inferredKind: kind,
       providerPriority: 0,
     };
-  }).sort((a, b) => b.heuristicScore - a.heuristicScore).slice(0, 24);
+  }).sort((a, b) => b.heuristicScore - a.heuristicScore).slice(0, 80);
 }
 
 export function toDiscoveryResult(

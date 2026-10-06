@@ -2,7 +2,7 @@ export const openApiDocument = {
   openapi: "3.1.0",
   info: {
     title: "Any Movie API",
-    version: "1.3.0",
+    version: "1.4.0",
     description:
       "Arabic-first open-web movie media discovery API for web and mobile clients.",
   },
@@ -69,6 +69,7 @@ export const openApiDocument = {
                   movieLanguage: { type: "string", default: "any" },
                   subtitleLanguage: { type: "string", default: "any" },
                   allowShortClips: { type: "boolean", default: false },
+                  resultLimit: { type: "integer", minimum: 5, maximum: 30, default: 10 },
                 },
               },
             },

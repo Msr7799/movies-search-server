@@ -1,51 +1,63 @@
-# Any Movie Server 1.3.0
+# Any Movie Server 1.4.0
 
-خادم بحث واكتشاف وسائط عام للتطبيق. البحث لم يعد مربوطًا بقائمة مزودين أو دومينات محددة.
+خادم بحث عام واكتشاف وسائط لتطبيق Any Movie. لا توجد قائمة providers أو domains مفروضة على Tavily Search.
 
-## مسار البحث
+## البحث
 
-1. يفهم Gemini عنوان الفيلم واللغة/السنة.
-2. Tavily Search يبحث في الويب العام بدون `include_domains`.
-3. أفضل الصفحات تمر عبر فاحص وسائط محدود وآمن.
-4. الفاحص يبحث في HTML/JSON و`video/source` وiframes وصفحات player القريبة عن HLS/M3U8 أو فيديو مباشر.
-5. إذا لم تكفِ نتائج البحث المباشر، يستخدم الخادم Tavily Crawl بشكل محدود على أفضل النتائج لاكتشاف صفحات داخل الموقع نفسه ثم يفحصها محليًا.
-6. لا يرجع التطبيق إلا نتيجة تم التحقق أن لها `playUrl` أو `hlsUrl`.
+`POST /api/v1/search`
 
-لا يوجد Provider allow-list. يبقى اسم `provider` في JSON فقط للتوافق مع التطبيق، وقيمته الآن اسم المضيف الذي جاءت منه الصفحة.
+مثال body:
+
+```json
+{
+  "query": "Kal Ho Naa Ho 2003",
+  "movieLanguage": "hi",
+  "subtitleLanguage": "ar",
+  "allowShortClips": false,
+  "resultLimit": 10
+}
+```
+
+`resultLimit` يقبل من 5 إلى 30، والافتراضي 10.
+
+المسار:
+
+1. Gemini يطبع/يصحح عنوان الفيلم والسنة والaliases.
+2. Tavily Search يبحث في الويب العام، بدون `include_domains`.
+3. السيرفر يفحص المرشحين بحثًا عن HLS/M3U8 أو فيديو مباشر داخل HTML/JSON/video/source/iframe/player links.
+4. Master HLS يتم تحليله لعدد الجودات والصوت والترجمة، ويتم فحص variant للحصول على مدة تقريبية عندما يمكن ذلك.
+5. إذا كانت المقاطع القصيرة غير مسموحة، يجب وجود دليل فيلم كامل أو مدة HLS مناسبة؛ live/short/trailer يُستبعد.
+6. إذا تم تحديد لغة ترجمة، يجب وجود evidence لها في HLS `TYPE=SUBTITLES` أو `<track>` أو metadata واضحة في الصفحة.
+7. إذا لم تكفِ النتائج، Tavily Crawl يعمل بشكل محدود على أفضل roots ثم تُفحص الصفحات الجديدة بنفس verifier.
+8. لا ترجع نتيجة إلا إذا كان لديها `playUrl` أو `hlsUrl` تم التحقق منه.
 
 ## الحماية
 
 - HTTPS عام فقط.
-- حظر loopback/private/link-local وDNS destinations غير العامة قبل fetch.
-- حدود صارمة للمهلة، الحجم، redirects، عدد الصفحات وعمق الزحف.
-- لا يوجد تجاوز لتسجيل الدخول أو paywalls أو DRM ولا استخراج مفاتيح تشفير.
-- الملف المباشر فقط يعلّم `downloadable=true`; HLS لا يتحول تلقائيًا لتنزيل إذا لم يكن ملفًا مباشرًا.
+- حظر loopback/private/link-local وDNS destinations غير العامة.
+- حدود للredirects والحجم والمهلات وعمق الصفحات.
+- لا bypass لتسجيل الدخول/paywalls/DRM ولا استخراج مفاتيح تشفير.
+- `downloadable=true` فقط للملف المباشر الذي تم التحقق منه كـvideo response.
 
-## متغيرات البيئة
+## Environment
 
-المطلوب:
+```env
+TAVILY_API_KEY=
+GEMINI_API_KEY=
+GEMINI_AUTO_SUGGESTED_API_KEY=
 
-- `TAVILY_API_KEY`
-- `GEMINI_API_KEY`
-- `GEMINI_AUTO_SUGGESTED_API_KEY`
+TAVILY_SEARCH_DEPTH=advanced
+TAVILY_MAX_RESULTS=20
+TAVILY_CRAWL_ROOTS=2
+TAVILY_CRAWL_LIMIT=8
+```
 
-مفيد للإنتاج:
-
-- `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`
-- `TAVILY_SEARCH_DEPTH=advanced` لتحسين جودة البحث عند توفر الرصيد
-- `TAVILY_MAX_RESULTS=10`
-- `TAVILY_CRAWL_ROOTS=1`
-- `TAVILY_CRAWL_LIMIT=5`
-
-لإيقاف Tavily Crawl والإبقاء على Search + فحص HTML فقط، ضع `TAVILY_CRAWL_ROOTS=0`.
+Upstash موصى به للكاش/rate-limit الموزع.
 
 ## Endpoints
 
-- `POST /api/v1/search` بحث عام ثم اكتشاف وسائط
-- `POST /api/v1/media` فحص أي رابط HTTPS عام أو التحقق من media request التقطه WebView
-- `GET /api/v1/providers` يعاد للتوافق فقط ويعطي `mode: open_web` وقائمة فارغة
-- `GET /api/v1/health` حالة المفاتيح/الخدمات
-
-## ملاحظة عن الصفحات الديناميكية
-
-الفحص السيرفري يستطيع اكتشاف manifests الموجودة في HTML/JSON والiframes والصفحات القريبة. إذا كان الموقع لا ينشئ رابط HLS إلا بعد JavaScript/interaction، WebView داخل تطبيق Android يراقب طلبات `m3u8/hls/playlist/manifest` أثناء تشغيل الصفحة ويرسل المرشح إلى `/api/v1/media` للتحقق ثم يحوله إلى Media3 عند نجاح الفحص.
+- `POST /api/v1/search`
+- `POST /api/v1/media`
+- `POST /api/v1/suggestions`
+- `GET /api/v1/providers` للتوافق فقط؛ يرجع `mode: open_web`
+- `GET /api/v1/health`

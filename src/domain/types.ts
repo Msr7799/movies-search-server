@@ -18,6 +18,9 @@ export type DiscoveryResult = {
   hlsMaster?: boolean;
   hlsVariantCount?: number;
   hlsAudioRenditionCount?: number;
+  hlsSubtitleRenditionCount?: number;
+  subtitleLanguages?: string[];
+  subtitleEvidence?: "manifest" | "track" | "page_text";
   hlsDurationSeconds?: number;
   hlsLive?: boolean;
   hlsEncrypted?: boolean;

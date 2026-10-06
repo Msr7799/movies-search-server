@@ -15,6 +15,7 @@ const schema = z.object({
   movieLanguage: z.enum(Object.keys(MOVIE_LANGUAGES) as [keyof typeof MOVIE_LANGUAGES, ...(keyof typeof MOVIE_LANGUAGES)[]]).default("any"),
   subtitleLanguage: z.enum(Object.keys(SUBTITLE_LANGUAGES) as [keyof typeof SUBTITLE_LANGUAGES, ...(keyof typeof SUBTITLE_LANGUAGES)[]]).default("any"),
   allowShortClips: z.boolean().default(false),
+  resultLimit: z.number().int().min(5).max(30).default(10),
 }).strict();
 
 export async function searchController(request: VercelRequest, context: RequestContext) {
@@ -22,16 +23,18 @@ export async function searchController(request: VercelRequest, context: RequestC
   const input = parseBody(request, schema);
   await enforceRateLimit("search", context.ip, config.searchLimit, 600);
   const normalized = { ...input, query: input.query.toLocaleLowerCase().normalize("NFKC") };
-  const hash = createHash("sha256").update(JSON.stringify({ ...normalized, discovery: "open-web-v2" })).digest("hex");
-  const cacheKey = `search:v6:${hash}`;
+  const hash = createHash("sha256").update(JSON.stringify({ ...normalized, discovery: "open-web-v3-fullmovie-subtitles" })).digest("hex");
+  const cacheKey = `search:v7:${hash}`;
   const cached = await cacheGet<DiscoveryResponse>(cacheKey);
   if (cached) return { ...cached, meta: { ...cached.meta, requestId: context.requestId, cached: true } };
 
   const response = await searchMovies({
     query: input.query,
     movieLanguage: MOVIE_LANGUAGES[input.movieLanguage],
-    subtitleLanguage: SUBTITLE_LANGUAGES[input.subtitleLanguage],
+    subtitleLanguage: input.subtitleLanguage,
+    subtitleLanguageLabel: SUBTITLE_LANGUAGES[input.subtitleLanguage],
     allowShortClips: input.allowShortClips,
+    resultLimit: input.resultLimit,
   }, context.requestId);
   await cacheSet(cacheKey, response, config.searchCacheSeconds);
   return response;

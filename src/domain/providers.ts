@@ -12,7 +12,7 @@ export function getProviders(): readonly never[] {
 }
 
 export function getProviderConfigSignature() {
-  return "open-web-v2";
+  return "open-web-v3";
 }
 
 export function getProviderDomains() {

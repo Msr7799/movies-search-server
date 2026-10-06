@@ -11,7 +11,14 @@ const MAX_REDIRECTS = 3;
 const MAX_CRAWL_DEPTH = 1;
 const MAX_CRAWL_PAGES = 4;
 
-type ExtractedMedia = { hls: string[]; video: string[]; audio: string[]; pages: string[] };
+type ExtractedMedia = {
+  hls: string[];
+  video: string[];
+  audio: string[];
+  pages: string[];
+  subtitleLanguages: string[];
+  subtitleEvidence?: "track" | "page_text";
+};
 type FetchTextResult = { url: string; contentType: string; text: string };
 type HlsInfo = ReturnType<typeof analyzeHlsManifest>;
 
@@ -85,7 +92,7 @@ async function fetchPublicText(
         signal: controller.signal,
         headers: {
           Accept: "text/html,application/xhtml+xml,application/json,text/plain,application/vnd.apple.mpegurl,application/x-mpegURL,video/*;q=0.9,audio/*;q=0.8,*/*;q=0.4",
-          "User-Agent": "AnyMovieOpenWebProbe/1.3",
+          "User-Agent": "AnyMovieOpenWebProbe/1.4",
           ...(options.referer ? { Referer: options.referer } : {}),
         },
       });
@@ -133,6 +140,31 @@ function safeResolvedUrl(value: string, baseUrl: string) {
   }
 }
 
+
+function normalizeSubtitleLanguage(value: string) {
+  const normalized = value.trim().toLowerCase().replace(/_/g, "-");
+  if (/^(?:ar|ara|arb)(?:-|$)/.test(normalized) || /arabic|العربية|عربي/.test(normalized)) return "ar";
+  if (/^(?:en|eng)(?:-|$)/.test(normalized) || /english/.test(normalized)) return "en";
+  if (/^(?:tr|tur)(?:-|$)/.test(normalized) || /turkish|türk/.test(normalized)) return "tr";
+  if (/^(?:fr|fra|fre)(?:-|$)/.test(normalized) || /french|français/.test(normalized)) return "fr";
+  if (/^(?:es|spa)(?:-|$)/.test(normalized) || /spanish|español/.test(normalized)) return "es";
+  if (/^(?:de|deu|ger)(?:-|$)/.test(normalized) || /german|deutsch/.test(normalized)) return "de";
+  if (/^(?:it|ita)(?:-|$)/.test(normalized) || /italian|italiano/.test(normalized)) return "it";
+  return normalized.split("-")[0]?.slice(0, 8) || undefined;
+}
+
+function subtitleHintsFromText(text: string) {
+  const languages = new Set<string>();
+  if (/(?:arabic subtitles?|arabic subbed|ترجمة عربية|مترجم(?:ة)?(?:\s+ب)?العربية|مترجم عربي|مترجم)/i.test(text)) languages.add("ar");
+  if (/(?:english subtitles?|eng(?:lish)? subbed)/i.test(text)) languages.add("en");
+  if (/(?:turkish subtitles?|türkçe altyazı)/i.test(text)) languages.add("tr");
+  if (/(?:french subtitles?|sous[- ]titres? français)/i.test(text)) languages.add("fr");
+  if (/(?:spanish subtitles?|subtítulos? español)/i.test(text)) languages.add("es");
+  if (/(?:german subtitles?|deutsche untertitel)/i.test(text)) languages.add("de");
+  if (/(?:italian subtitles?|sottotitoli italiani)/i.test(text)) languages.add("it");
+  return [...languages];
+}
+
 function mediaKind(value: string) {
   const pathname = new URL(value).pathname.toLowerCase();
   if (pathname.endsWith(".m3u8")) return "hls" as const;
@@ -147,6 +179,8 @@ export function extractMediaCandidates(markup: string, baseUrl: string): Extract
   const video = new Set<string>();
   const audio = new Set<string>();
   const pages = new Set<string>();
+  const subtitleLanguages = new Set<string>();
+  let subtitleEvidence: "track" | "page_text" | undefined;
   const add = (raw: string, forced?: "hls" | "video" | "audio") => {
     const value = safeResolvedUrl(raw, baseUrl);
     if (!value) return;
@@ -192,6 +226,22 @@ export function extractMediaCandidates(markup: string, baseUrl: string): Extract
     if (content) add(content);
   }
 
+  const trackTags = /<track\b[^>]*>/gi;
+  for (const tagMatch of text.matchAll(trackTags)) {
+    const tag = tagMatch[0];
+    if (!/(?:kind=["'](?:subtitles|captions)["']|srclang=)/i.test(tag)) continue;
+    const languageRaw = tag.match(/(?:srclang|lang)=["']([^"']+)["']/i)?.[1]
+      ?? tag.match(/label=["']([^"']+)["']/i)?.[1];
+    const language = languageRaw ? normalizeSubtitleLanguage(languageRaw) : undefined;
+    if (language) subtitleLanguages.add(language);
+    subtitleEvidence = "track";
+  }
+
+  if (subtitleLanguages.size === 0) {
+    for (const language of subtitleHintsFromText(text)) subtitleLanguages.add(language);
+    if (subtitleLanguages.size > 0) subtitleEvidence = "page_text";
+  }
+
   const iframes = /<iframe\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
   for (const match of text.matchAll(iframes)) if (match[1]) addPage(match[1]);
 
@@ -206,6 +256,8 @@ export function extractMediaCandidates(markup: string, baseUrl: string): Extract
     video: [...video].slice(0, 12),
     audio: [...audio].slice(0, 8),
     pages: [...pages].slice(0, 10),
+    subtitleLanguages: [...subtitleLanguages],
+    ...(subtitleEvidence ? { subtitleEvidence } : {}),
   };
 }
 
@@ -214,15 +266,28 @@ export function analyzeHlsManifest(text: string) {
   const valid = normalized.trimStart().startsWith("#EXTM3U");
   const variants = valid ? (normalized.match(/^#EXT-X-STREAM-INF:/gim)?.length ?? 0) : 0;
   const audioRenditions = valid ? (normalized.match(/^#EXT-X-MEDIA:[^\n]*TYPE=AUDIO/gim)?.length ?? 0) : 0;
+  const subtitleLines = valid ? [...normalized.matchAll(/^#EXT-X-MEDIA:([^\n]*TYPE=SUBTITLES[^\n]*)/gim)] : [];
+  const subtitleLanguages = [...new Set(subtitleLines.flatMap((match) => {
+    const line = match[1] ?? "";
+    const raw = line.match(/LANGUAGE=["']?([^,"']+)/i)?.[1] ?? line.match(/NAME=["']([^"']+)/i)?.[1];
+    const value = raw ? normalizeSubtitleLanguage(raw) : undefined;
+    return value ? [value] : [];
+  }))];
   const mediaPlaylist = valid && /(?:^|\n)#EXTINF:/i.test(normalized);
   const encrypted = valid && /#EXT-X-(?:SESSION-)?KEY:[^\n]*METHOD=(?!NONE(?:,|$))/i.test(normalized);
   const durations = valid ? [...normalized.matchAll(/^#EXTINF:([0-9.]+)/gim)].map((match) => Number(match[1])).filter(Number.isFinite) : [];
   const durationSeconds = durations.length > 0 ? Math.round(durations.reduce((sum, value) => sum + value, 0)) : undefined;
+  const firstVariantUri = valid && variants > 0
+    ? normalized.match(/^#EXT-X-STREAM-INF:[^\n]*\n([^#\n][^\n]*)/im)?.[1]?.trim()
+    : undefined;
   return {
     valid,
     master: valid && variants > 0,
     variantCount: variants,
     audioRenditionCount: audioRenditions,
+    subtitleRenditionCount: subtitleLines.length,
+    subtitleLanguages,
+    ...(firstVariantUri ? { firstVariantUri } : {}),
     ...(mediaPlaylist ? { live: !/(?:^|\n)#EXT-X-ENDLIST(?:\n|$)/i.test(normalized) } : {}),
     ...(durationSeconds === undefined ? {} : { durationSeconds }),
     encrypted,
@@ -236,8 +301,34 @@ async function inspectHls(url: string, referer?: string) {
       timeoutMs: MEDIA_TIMEOUT_MS,
       ...(referer ? { referer } : {}),
     });
-    const info = analyzeHlsManifest(response.text);
+    let info = analyzeHlsManifest(response.text);
     const verified = info.valid || response.contentType.includes("mpegurl");
+
+    // Master playlists usually do not contain EXTINF durations. Inspect one child
+    // playlist so the full-movie filter can distinguish a feature from a short clip.
+    if (verified && info.master && info.firstVariantUri) {
+      const childUrl = safeResolvedUrl(info.firstVariantUri, response.url);
+      if (childUrl) {
+        try {
+          const child = await fetchPublicText(childUrl, {
+            maxBytes: MAX_MANIFEST_BYTES,
+            timeoutMs: MEDIA_TIMEOUT_MS,
+            referer: response.url,
+          });
+          const childInfo = analyzeHlsManifest(child.text);
+          if (childInfo.valid) {
+            info = {
+              ...info,
+              ...(childInfo.live === undefined ? {} : { live: childInfo.live }),
+              ...(childInfo.durationSeconds === undefined ? {} : { durationSeconds: childInfo.durationSeconds }),
+              encrypted: info.encrypted || childInfo.encrypted,
+            };
+          }
+        } catch {
+          // A verified master playlist is still playable even if one variant probe fails.
+        }
+      }
+    }
     return { verified, url: response.url, info };
   } catch {
     return { verified: false, url, info: analyzeHlsManifest("") };
@@ -262,6 +353,8 @@ function hlsInfoPatch(info: HlsInfo): Partial<DiscoveryResult> {
     hlsMaster: info.master,
     hlsVariantCount: info.variantCount,
     hlsAudioRenditionCount: info.audioRenditionCount,
+    hlsSubtitleRenditionCount: info.subtitleRenditionCount,
+    ...(info.subtitleLanguages.length > 0 ? { subtitleLanguages: info.subtitleLanguages, subtitleEvidence: "manifest" as const } : {}),
     ...(info.live === undefined ? {} : { hlsLive: info.live }),
     ...(info.durationSeconds === undefined ? {} : { hlsDurationSeconds: info.durationSeconds }),
     hlsEncrypted: info.encrypted,
@@ -274,6 +367,25 @@ function directPatch(source: ReturnType<typeof playableSource>) {
   }
   if (source.playable) return { detectedBy: "direct_url" as const };
   return {};
+}
+
+function pageSubtitlePatch(extracted: ExtractedMedia): Partial<DiscoveryResult> {
+  if (extracted.subtitleLanguages.length === 0) return {};
+  return {
+    subtitleLanguages: extracted.subtitleLanguages,
+    ...(extracted.subtitleEvidence ? { subtitleEvidence: extracted.subtitleEvidence } : {}),
+  };
+}
+
+function mergeSubtitleMetadata(primary: Partial<DiscoveryResult>, fallback: Partial<DiscoveryResult>): Partial<DiscoveryResult> {
+  const languages = [...new Set([...(primary.subtitleLanguages ?? []), ...(fallback.subtitleLanguages ?? [])])];
+  const evidence = primary.subtitleEvidence ?? fallback.subtitleEvidence;
+  return {
+    ...fallback,
+    ...primary,
+    ...(languages.length > 0 ? { subtitleLanguages: languages } : {}),
+    ...(evidence ? { subtitleEvidence: evidence } : {}),
+  };
 }
 
 async function discoverPage(
@@ -317,26 +429,27 @@ async function discoverPage(
     }
 
     const extracted = extractMediaCandidates(page.text, page.url);
+    const pageSubtitles = pageSubtitlePatch(extracted);
     const hlsChecks = await Promise.all(extracted.hls.slice(0, 6).map(async (hlsUrl) => inspectHls(hlsUrl, page.url)));
     const hls = hlsChecks.find((item) => item.verified);
-    if (hls) return {
+    if (hls) return mergeSubtitleMetadata({
       playable: true,
       playUrl: hls.url,
       hlsUrl: hls.url,
       kind: "hls",
       detectedBy: "html_manifest",
       ...hlsInfoPatch(hls.info),
-    };
+    }, pageSubtitles);
 
     const videoChecks = await Promise.all(extracted.video.slice(0, 4).map(async (videoUrl) => inspectVideo(videoUrl, page.url)));
     const video = videoChecks.find((item) => item.verified);
-    if (video) return { playable: true, playUrl: video.url, kind: "video", downloadable: true, downloadUrl: video.url, detectedBy: "html_media" };
+    if (video) return { playable: true, playUrl: video.url, kind: "video", downloadable: true, downloadUrl: video.url, detectedBy: "html_media", ...pageSubtitles };
 
     const nestedResults = await Promise.all(
       extracted.pages.slice(0, 3).map((nested) => discoverPage(nested, state, depth + 1, page.url)),
     );
     const nestedPlayable = nestedResults.find((item) => item.playable);
-    if (nestedPlayable) return nestedPlayable;
+    if (nestedPlayable) return mergeSubtitleMetadata(nestedPlayable, pageSubtitles);
   } catch {
     return { playable: false };
   }
@@ -388,7 +501,7 @@ async function mapLimit<T, R>(values: T[], limit: number, worker: (value: T) => 
 }
 
 export async function enrichDiscoveryResults(results: DiscoveryResult[]) {
-  return mapLimit(results, 4, async (result) => {
+  return mapLimit(results, 8, async (result) => {
     try {
       return { ...result, ...(await discoverPlayableMedia(result.url)) };
     } catch {
