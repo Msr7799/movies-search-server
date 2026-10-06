@@ -21,4 +21,13 @@ describe("candidate scoring", () => {
     expect(candidates).toHaveLength(2);
     expect(candidates.find((candidate) => candidate.url.includes("movies.example"))?.inferredKind).toBe("full_movie");
   });
+  it("recognizes Arabic full-movie search snippets and prioritizes watch pages", () => {
+    const candidates = makeCandidates([
+      { title: "مشاهدة فيلم Example Movie 2003 مترجم HD", url: "https://video.example/watch.php?vid=abc123", content: "مشاهدة وتحميل فيلم Example Movie 2003 مترجم اون لاين بجودة عالية HD كامل", score: 0.03 },
+      { title: "Example Movie streaming: where to watch?", url: "https://catalog.example/movies/example", content: "streaming services rent or buy online", score: 0.9 },
+    ], ["Example Movie"]);
+    expect(candidates[0]?.url).toContain("watch.php");
+    expect(candidates[0]?.inferredKind).toBe("full_movie");
+  });
+
 });

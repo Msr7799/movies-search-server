@@ -1,4 +1,4 @@
-# Any Movie Server 1.8.0
+# Any Movie Server 1.9.0
 
 خادم بحث عام واكتشاف وسائط لتطبيق Any Movie. لا توجد قائمة providers أو domains مفروضة على Tavily Search.
 
@@ -61,3 +61,7 @@ Upstash موصى به للكاش/rate-limit الموزع.
 - `POST /api/v1/suggestions`
 - `GET /api/v1/providers` للتوافق فقط؛ يرجع `mode: open_web`
 - `GET /api/v1/health`
+
+## Search behavior in 1.9.0
+
+Search is open-web and does not use a content-provider allow-list. The exact user query is preserved, indexed dynamic watch/player pages are retained when crawler rendering fails, and Gemini failure no longer prevents Tavily from searching.

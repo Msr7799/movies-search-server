@@ -23,8 +23,8 @@ export async function searchController(request: VercelRequest, context: RequestC
   const input = parseBody(request, schema);
   await enforceRateLimit("search", context.ip, config.searchLimit, 600);
   const normalized = { ...input, query: input.query.toLocaleLowerCase().normalize("NFKC") };
-  const hash = createHash("sha256").update(JSON.stringify({ ...normalized, discovery: "open-web-v4-natural-tavily" })).digest("hex");
-  const cacheKey = `search:v8:${hash}`;
+  const hash = createHash("sha256").update(JSON.stringify({ ...normalized, discovery: "open-web-v5-indexed-player-pages" })).digest("hex");
+  const cacheKey = `search:v9:${hash}`;
   const cached = await cacheGet<DiscoveryResponse>(cacheKey);
   if (cached) return { ...cached, meta: { ...cached.meta, requestId: context.requestId, cached: true } };
 

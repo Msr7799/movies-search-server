@@ -92,7 +92,7 @@ async function fetchPublicText(
         signal: controller.signal,
         headers: {
           Accept: "text/html,application/xhtml+xml,application/json,text/plain,application/vnd.apple.mpegurl,application/x-mpegURL,video/*;q=0.9,audio/*;q=0.8,*/*;q=0.4",
-          "User-Agent": "AnyMovieOpenWebProbe/1.8",
+          "User-Agent": "AnyMovieOpenWebProbe/1.9",
           ...(options.referer ? { Referer: options.referer } : {}),
         },
       });

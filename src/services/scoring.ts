@@ -44,23 +44,38 @@ export function makeCandidates(results: TavilyResult[], knownTitles: string[]) {
 
   return [...unique.values()].map((item, index): Candidate => {
     const url = item.url!;
-    const title = item.title?.trim() || new URL(url).hostname;
-    const content = (item.content ?? "").replace(/\s+/g, " ").slice(0, 900);
+    const parsed = new URL(url);
+    const title = item.title?.trim() || parsed.hostname;
+    const content = (item.content ?? "").replace(/\s+/g, " ").slice(0, 1200);
     const source = playableSource(url);
     const partial = { url, title, content };
     const kind = inferSourceKind(partial);
-    const similarity = titleSimilarity(`${title} ${content.slice(0, 240)}`, knownTitles);
-    const kindBoost = kind === "full_movie" ? 0.18 : kind === "availability_page" ? 0.04 : -0.2;
-    const playableBoost = source.playable ? 0.18 : 0;
+    const similarity = titleSimilarity(`${title} ${content.slice(0, 360)}`, knownTitles);
+    const kindBoost = kind === "full_movie" ? 0.2 : kind === "availability_page" ? 0.01 : -0.24;
+    const playableBoost = source.playable ? 0.2 : 0;
+
+    // General open-web intent ranking: keep dynamic watch/player pages near the top even
+    // when Tavily gives them a modest score. This is domain-agnostic and does not depend
+    // on a provider list. It is especially useful for indexed pages whose HTML crawler
+    // later fails because the actual player is created by JavaScript.
+    const route = `${parsed.pathname}${parsed.search}`.toLowerCase();
+    const watchRoute = /(?:^|[\/_\-.])(?:watch|play|player|embed|stream|video)(?:[\/_\-.]|\.php|$)/i.test(route);
+    const mediaId = /[?&](?:vid|video|movie|media|id|watch|play)=[^&]+/i.test(parsed.search);
+    const playerIntentBoost = watchRoute ? 0.12 : mediaId ? 0.07 : 0;
+    const fullEvidence = /\b(full movie|full film|complete movie|watch full|movie online|stream online)\b|(?:مشاهدة\s+فيلم|فيلم\s+كامل|مترجم)/i.test(`${title} ${content}`);
+    const fullEvidenceBoost = fullEvidence ? 0.09 : 0;
+    const availabilityLanding = /\b(where to watch|streaming services|rent or buy|rent|buy online|subscription)\b/i.test(`${title} ${content}`);
+    const availabilityPenalty = availabilityLanding && !watchRoute ? 0.1 : 0;
+
     return {
       id: String(index + 1), title, url, content,
       tavilyScore: Math.max(0, Math.min(1, item.score ?? 0)),
-      heuristicScore: similarity * 0.58 + (item.score ?? 0) * 0.24 + kindBoost + playableBoost,
+      heuristicScore: similarity * 0.56 + (item.score ?? 0) * 0.22 + kindBoost + playableBoost + playerIntentBoost + fullEvidenceBoost - availabilityPenalty,
       playable: source.playable,
       inferredKind: kind,
       providerPriority: 0,
     };
-  }).sort((a, b) => b.heuristicScore - a.heuristicScore).slice(0, 180);
+  }).sort((a, b) => b.heuristicScore - a.heuristicScore).slice(0, 220);
 }
 
 
