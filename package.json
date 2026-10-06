@@ -1,0 +1,27 @@
+{
+  "name": "any-movie-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Production-ready movie discovery API for Vercel",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "check": "pnpm run build && pnpm test",
+    "smoke:providers": "node --env-file=.env scripts/provider-smoke.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@vercel/node": "^5.5.20",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.10",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
