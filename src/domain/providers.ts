@@ -118,6 +118,15 @@ export function isAllowedProviderUrl(value: string) {
   }
 }
 
+export function isPlayableProviderUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && Boolean(configuredProvider(value)?.provider.inAppPlayback);
+  } catch {
+    return false;
+  }
+}
+
 export function providerFor(value: string) {
   const hostname = hostnameOf(value);
   return configuredProvider(value)?.provider.name ?? hostname;

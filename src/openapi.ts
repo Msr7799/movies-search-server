@@ -2,7 +2,7 @@ export const openApiDocument = {
   openapi: "3.1.0",
   info: {
     title: "Any Movie API",
-    version: "1.1.0",
+    version: "1.2.0",
     description:
       "Arabic-first legal movie discovery API for web and mobile clients.",
   },
@@ -49,7 +49,7 @@ export const openApiDocument = {
         summary: "Inspect an allowed provider URL for direct video or HLS",
         requestBody: {
           required: true,
-          content: { "application/json": { schema: { type: "object", required: ["url"], properties: { url: { type: "string", format: "uri" } } } } },
+          content: { "application/json": { schema: { type: "object", required: ["url"], properties: { url: { type: "string", format: "uri" }, originUrl: { type: "string", format: "uri", description: "Optional configured playback page that originated an observed media request." } } } } },
         },
         responses: { "200": { description: "Detected media" }, "400": { description: "Unsupported provider or invalid URL" }, "429": { description: "Rate limited" } },
       },

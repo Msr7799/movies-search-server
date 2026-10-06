@@ -109,4 +109,4 @@ Search results from configured legal providers pass through a bounded media insp
 - never attempts DRM bypass or key extraction;
 - marks only direct video files as `downloadable` for the Android DownloadManager.
 
-`POST /api/v1/media` can inspect an allowed provider URL entered manually in the app. Search responses and media-inspection responses use the same `playUrl`, `hlsUrl`, `kind`, `downloadable`, and `downloadUrl` fields so the Android client has one playback path.
+`POST /api/v1/media` can inspect an allowed provider URL entered manually in the app. It also accepts an optional `originUrl` when the Android WebView observes a likely media request; the server re-validates the configured origin and the candidate before returning it. Search responses and media-inspection responses use the same `playUrl`, `hlsUrl`, `kind`, `downloadable`, and `downloadUrl` fields so the Android client has one playback path.

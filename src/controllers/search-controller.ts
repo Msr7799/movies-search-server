@@ -24,7 +24,7 @@ export async function searchController(request: VercelRequest, context: RequestC
   await enforceRateLimit("search", context.ip, config.searchLimit, 600);
   const normalized = { ...input, query: input.query.toLocaleLowerCase().normalize("NFKC") };
   const hash = createHash("sha256").update(JSON.stringify({ ...normalized, providers: getProviderConfigSignature() })).digest("hex");
-  const cacheKey = `search:v3:${hash}`;
+  const cacheKey = `search:v5:${hash}`;
   const cached = await cacheGet<DiscoveryResponse>(cacheKey);
   if (cached) return { ...cached, meta: { ...cached.meta, requestId: context.requestId, cached: true } };
 

@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import { getPlayableDomains, getProviderDomains, isAllowedProviderUrl } from "../domain/providers.js";
+import { getPlayableDomains, isAllowedProviderUrl } from "../domain/providers.js";
 import type { ContentType, DiscoveryResponse } from "../domain/types.js";
 import { geminiJson } from "./gemini.js";
 import { makeCandidates, normalizeText, toDiscoveryResult } from "./scoring.js";
@@ -56,14 +56,13 @@ export async function searchMovies(input: SearchInput, requestId: string): Promi
   const fullMovieQuery = input.allowShortClips
     ? `"${title}" ${original} ${understanding.year} official movie trailer clip ${input.movieLanguage}`
     : `"${title}" ${original} ${understanding.year} official "full movie" complete film ${input.movieLanguage} -trailer -teaser -clip -scene -song -review`;
-  const availabilityQuery = `"${title}" ${understanding.year} watch legally ${config.region} ${input.subtitleLanguage}`;
   const aiQuery = understanding.search_queries.map((item) => item.trim()).find(Boolean);
-  const providerDomains = getProviderDomains();
   const playableDomains = getPlayableDomains();
+  const directQuery = `"${title}" ${understanding.year} official watch full movie ${input.movieLanguage} ${input.subtitleLanguage}`;
   const searches = [
     ...(playableDomains.length > 0 ? [tavilySearch(fullMovieQuery, playableDomains)] : []),
-    tavilySearch(availabilityQuery, providerDomains),
-    ...(aiQuery ? [tavilySearch(aiQuery, providerDomains)] : []),
+    ...(playableDomains.length > 0 ? [tavilySearch(directQuery, playableDomains)] : []),
+    ...(aiQuery && playableDomains.length > 0 ? [tavilySearch(aiQuery, playableDomains)] : []),
   ];
   const settled = await Promise.allSettled(searches);
   const partial = settled.some((item) => item.status === "rejected");
@@ -109,15 +108,20 @@ export async function searchMovies(input: SearchInput, requestId: string): Promi
     return !input.allowShortClips && result.contentType === "short_clip" ? [] : [result];
   }).filter((item, index, all) => all.findIndex((other) => other.url === item.url) === index)
     .sort((a, b) => a.providerPriority - b.providerPriority || b.confidence - a.confidence)
-    .slice(0, 5);
+    .slice(0, 12);
 
-  const enrichedResults = await enrichDiscoveryResults(results);
+  const enrichedResults = (await enrichDiscoveryResults(results))
+    .filter((item) => item.playable && Boolean(item.hlsUrl || item.playUrl))
+    .sort((a, b) => a.providerPriority - b.providerPriority || Number(Boolean(b.hlsUrl)) - Number(Boolean(a.hlsUrl)) || b.confidence - a.confidence)
+    .slice(0, 8);
 
   return {
     understoodTitle: title,
     ...(original ? { originalTitle: original } : {}),
     ...(understanding.year ? { year: understanding.year } : {}),
-    summary: ranking.summary,
+    summary: enrichedResults.length > 0
+      ? `تم العثور على ${enrichedResults.length} مصدر قابل للتشغيل مباشرة لـ ${title}.`
+      : `لم يتم العثور على بث مباشر قابل للتشغيل لهذا العنوان من المصادر المهيأة.`,
     results: enrichedResults,
     meta: { requestId, cached: false, partial, searchedAt: new Date().toISOString() },
   };

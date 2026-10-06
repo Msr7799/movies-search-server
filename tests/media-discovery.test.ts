@@ -27,8 +27,8 @@ describe("media discovery parser", () => {
     expect(found.video).toEqual([]);
   });
   it("classifies HLS master and media playlists", () => {
-    expect(analyzeHlsManifest("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\n720.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000\n1080.m3u8")).toMatchObject({ valid: true, master: true, variantCount: 2, encrypted: false });
-    expect(analyzeHlsManifest("#EXTM3U\n#EXTINF:6,\na.ts\n#EXT-X-ENDLIST")).toMatchObject({ valid: true, master: false, variantCount: 0, live: false });
+    expect(analyzeHlsManifest("#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",URI=\"audio.m3u8\"\n#EXT-X-STREAM-INF:BANDWIDTH=1000,AUDIO=\"audio\"\n720.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2000,AUDIO=\"audio\"\n1080.m3u8")).toMatchObject({ valid: true, master: true, variantCount: 2, audioRenditionCount: 1, encrypted: false });
+    expect(analyzeHlsManifest("#EXTM3U\n#EXTINF:6,\na.ts\n#EXTINF:4.5,\nb.ts\n#EXT-X-ENDLIST")).toMatchObject({ valid: true, master: false, variantCount: 0, durationSeconds: 11, live: false });
     expect(analyzeHlsManifest("#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\"\n#EXTINF:6,\na.ts")).toMatchObject({ valid: true, live: true, encrypted: true });
   });
 });

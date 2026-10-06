@@ -14,9 +14,11 @@ export type DiscoveryResult = {
   kind?: "video" | "hls" | "embed";
   downloadable?: boolean;
   downloadUrl?: string;
-  detectedBy?: "direct_url" | "content_type" | "html_manifest" | "html_media";
+  detectedBy?: "direct_url" | "content_type" | "html_manifest" | "html_media" | "provider_api" | "webview_observed";
   hlsMaster?: boolean;
   hlsVariantCount?: number;
+  hlsAudioRenditionCount?: number;
+  hlsDurationSeconds?: number;
   hlsLive?: boolean;
   hlsEncrypted?: boolean;
   providerPriority: number;
