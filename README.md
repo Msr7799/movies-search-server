@@ -66,7 +66,7 @@ pnpm smoke:providers
 
 1. أنشئ Git repository لهذا المجلد أو ارفعه داخل مستودع وحدد **Root Directory** إلى `any-movie-server`.
 2. من Vercel اختر **Add New → Project** واربط المستودع.
-3. اترك Framework Preset على **Other**؛ Vercel يكتشف ملفات TypeScript داخل `api/` كـ Node.js Functions.
+3. اترك Framework Preset على **Other**؛ يثبت `vercel.json` الإعداد على `framework: null` ويحدد `public` كمخرج ثابت، بينما يكتشف Vercel ملفات TypeScript داخل `api/` كـ Node.js Functions.
 4. أضف في **Settings → Environment Variables** القيم المطلوبة:
    - `TAVILY_API_KEY`
    - `GEMINI_API_KEY`

@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Production-ready movie discovery API for Vercel",
   "engines": {
-    "node": ">=20.9.0"
+    "node": "24.x"
   },
   "packageManager": "pnpm@10.33.0",
   "scripts": {
