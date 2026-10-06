@@ -87,7 +87,7 @@ pnpm smoke:providers
 
 ### Ordered providers and HLS
 
-Set `PROVIDERS` to a JSON array of `{ "domain", "name", "inAppPlayback" }` objects. Array order is the search and response priority; the first provider is priority 1. Set `PROVIDERS_IN_APP_PLAYBACK=true` to override every item with one Boolean switch. `GET /api/v1/providers` returns the effective active order and values. When an allowed result is already a direct HTTPS `.m3u8` URL on an enabled provider, the search response returns both `playUrl` and `hlsUrl` with `kind: "hls"`. Known YouTube, Vimeo, Archive.org, and Dailymotion pages use official embed URLs. Subscription/DRM pages remain external provider links; the server does not extract or bypass protected streams.
+Set `PROVIDERS` to a JSON array of `{ "domain", "name", "inAppPlayback" }` objects. Array order is the search and response priority; the first provider is priority 1. The server reads `inAppPlayback` separately for every provider: use `true` for official embeds or direct public streams and `false` for protected/DRM providers. `GET /api/v1/providers` returns the active order and values. When an allowed result is already a direct HTTPS `.m3u8` URL on an enabled provider, the search response returns both `playUrl` and `hlsUrl` with `kind: "hls"`. Protected providers remain external links; the server does not extract or bypass protected streams.
 
 Deploy this folder as a Vercel project using the **Other** preset. Configure the three required server-only API keys and `ALLOWED_ORIGINS`. Add Upstash Redis for distributed caching and rate limiting across serverless instances. Validate `/api/v1/health`, then test suggestions and search. Never ship provider credentials in web or mobile builds.
 

@@ -6,7 +6,6 @@ afterEach(() => {
   if (originalProviders === undefined) delete process.env.PROVIDERS;
   else process.env.PROVIDERS = originalProviders;
   delete process.env.PROVIDERS_JSON;
-  delete process.env.PROVIDERS_IN_APP_PLAYBACK;
 });
 
 describe("candidate scoring", () => {

@@ -10,6 +10,8 @@ export const DEFAULT_PROVIDERS: readonly ProviderConfig[] = [
   { domain: "youtube.com", name: "YouTube", inAppPlayback: true },
   { domain: "youtu.be", name: "YouTube", inAppPlayback: true },
   { domain: "vimeo.com", name: "Vimeo", inAppPlayback: true },
+  {"domain":"youtube.com","name":"YouTube","inAppPlayback":true},
+  {"domain":"ddramacafe-tv.bar","name":"DDRamacafe","inAppPlayback":true},
   { domain: "archive.org", name: "Internet Archive", inAppPlayback: true },
   { domain: "justwatch.com", name: "JustWatch", inAppPlayback: false },
   { domain: "reelgood.com", name: "Reelgood", inAppPlayback: false },
@@ -71,11 +73,7 @@ function parsedProviders(value: string | undefined): ProviderConfig[] {
 
 export function getProviders(): readonly ProviderConfig[] {
   const configured = parsedProviders(process.env.PROVIDERS_JSON ?? process.env.PROVIDERS);
-  const providers = configured.length > 0 ? configured : DEFAULT_PROVIDERS;
-  const override = process.env.PROVIDERS_IN_APP_PLAYBACK?.trim().toLowerCase();
-  if (override !== "true" && override !== "false") return providers;
-  const inAppPlayback = override === "true";
-  return providers.map((provider) => ({ ...provider, inAppPlayback }));
+  return configured.length > 0 ? configured : DEFAULT_PROVIDERS;
 }
 
 export function getProviderConfigSignature() {
