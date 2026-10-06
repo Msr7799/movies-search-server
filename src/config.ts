@@ -31,7 +31,7 @@ export const config = {
     );
   },
   get searchLimit() {
-    return integer("SEARCH_LIMIT_PER_10_MINUTES", 5, 1, 100);
+    return integer("SEARCH_LIMIT_PER_10_MINUTES", 20, 1, 100);
   },
   get suggestLimit() {
     return integer("SUGGEST_LIMIT_PER_MINUTE", 20, 1, 200);
@@ -43,21 +43,33 @@ export const config = {
     return integer("SUGGEST_CACHE_SECONDS", 86_400, 60, 604_800);
   },
   get tavilyDepth() {
-    return process.env.TAVILY_SEARCH_DEPTH === "advanced"
-      ? ("advanced" as const)
-      : ("basic" as const);
+    const value = process.env.TAVILY_SEARCH_DEPTH;
+    if (value === "advanced" || value === "fast" || value === "ultra-fast") return value;
+    return "basic" as const;
   },
   get tavilyMaxResults() {
     return integer("TAVILY_MAX_RESULTS", 20, 5, 20);
   },
   get tavilyCrawlLimit() {
-    return integer("TAVILY_CRAWL_LIMIT", 8, 2, 10);
+    return integer("TAVILY_CRAWL_LIMIT", 24, 4, 80);
   },
   get tavilyCrawlRoots() {
-    return integer("TAVILY_CRAWL_ROOTS", 2, 0, 4);
+    return integer("TAVILY_CRAWL_ROOTS", 3, 0, 6);
+  },
+  get tavilyCrawlDepth() {
+    return integer("TAVILY_CRAWL_DEPTH", 2, 1, 5);
+  },
+  get tavilyCrawlBreadth() {
+    return integer("TAVILY_CRAWL_BREADTH", 20, 1, 80);
+  },
+  get tavilyCrawlTimeoutSeconds() {
+    return integer("TAVILY_CRAWL_TIMEOUT_SECONDS", 35, 10, 60);
+  },
+  get tavilyCrawlExtractDepth() {
+    return process.env.TAVILY_CRAWL_EXTRACT_DEPTH === "advanced" ? ("advanced" as const) : ("basic" as const);
   },
   get region() {
-    return (process.env.APP_REGION || "Bahrain").slice(0, 80);
+    return (process.env.APP_REGION || "").slice(0, 80);
   },
 };
 

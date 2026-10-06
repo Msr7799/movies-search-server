@@ -8,8 +8,8 @@ const MAX_MANIFEST_BYTES = 360 * 1024;
 const PAGE_TIMEOUT_MS = 5_000;
 const MEDIA_TIMEOUT_MS = 4_000;
 const MAX_REDIRECTS = 3;
-const MAX_CRAWL_DEPTH = 1;
-const MAX_CRAWL_PAGES = 4;
+const MAX_CRAWL_DEPTH = 2;
+const MAX_CRAWL_PAGES = 10;
 
 type ExtractedMedia = {
   hls: string[];
@@ -42,9 +42,9 @@ function privateIp(address: string) {
   return mapped ? privateIpv4(mapped) : false;
 }
 
-export async function assertPublicHttpsUrl(value: string) {
+export async function assertPublicWebUrl(value: string) {
   const parsed = new URL(value);
-  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port) throw new Error("UNSAFE_MEDIA_URL");
+  if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.port) throw new Error("UNSAFE_MEDIA_URL");
   const hostname = parsed.hostname.toLowerCase();
   if (!hostname.includes(".") || hostname === "localhost" || hostname.endsWith(".local")) throw new Error("UNSAFE_MEDIA_HOST");
   const addresses = await lookup(hostname, { all: true, verbatim: true });
@@ -82,7 +82,7 @@ async function fetchPublicText(
 ): Promise<FetchTextResult> {
   let current = initialUrl;
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
-    await assertPublicHttpsUrl(current);
+    await assertPublicWebUrl(current);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), options.timeoutMs);
     try {
@@ -92,7 +92,7 @@ async function fetchPublicText(
         signal: controller.signal,
         headers: {
           Accept: "text/html,application/xhtml+xml,application/json,text/plain,application/vnd.apple.mpegurl,application/x-mpegURL,video/*;q=0.9,audio/*;q=0.8,*/*;q=0.4",
-          "User-Agent": "AnyMovieOpenWebProbe/1.4",
+          "User-Agent": "AnyMovieOpenWebProbe/1.8",
           ...(options.referer ? { Referer: options.referer } : {}),
         },
       });
@@ -132,7 +132,7 @@ function decodeMarkup(value: string) {
 function safeResolvedUrl(value: string, baseUrl: string) {
   try {
     const parsed = new URL(decodeMarkup(value.trim()), baseUrl);
-    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port) return undefined;
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.port) return undefined;
     parsed.hash = "";
     return parsed.href;
   } catch {
@@ -197,7 +197,7 @@ export function extractMediaCandidates(markup: string, baseUrl: string): Extract
   const quoted = /["']([^"'<>\s]+?\.(?:m3u8|mp4|webm|m4v|mov|ogv|ogg|m4a|mp3|aac|wav|flac|oga)(?:\?[^"'<>\s]*)?)["']/gi;
   for (const match of text.matchAll(quoted)) if (match[1]) add(match[1]);
 
-  const absolute = /https:\/\/[^\s"'<>\\]+?\.(?:m3u8|mp4|webm|m4v|mov|ogv|ogg|m4a|mp3|aac|wav|flac|oga)(?:\?[^\s"'<>\\]*)?/gi;
+  const absolute = /https?:\/\/[^\s'"<>\\]+?\.(?:m3u8|mp4|webm|m4v|mov|ogv|ogg|m4a|mp3|aac|wav|flac|oga)(?:\?[^\s'"<>\\]*)?/gi;
   for (const match of text.matchAll(absolute)) if (match[0]) add(match[0]);
 
   const namedHls = /["'](?:hls(?:manifest)?(?:url)?|hls_manifest_url|hls_url|m3u8(?:url)?|playlist(?:url)?|manifest(?:url)?|master(?:url)?)["']\s*[:=]\s*["']([^"']+)["']/gi;
@@ -206,8 +206,20 @@ export function extractMediaCandidates(markup: string, baseUrl: string): Extract
   const namedVideo = /["'](?:video(?:url)?|progressive(?:url)?|file|src)["']\s*[:=]\s*["']([^"']+\.(?:mp4|webm|m4v|mov|ogv|ogg)(?:\?[^"']*)?)["']/gi;
   for (const match of text.matchAll(namedVideo)) if (match[1]) add(match[1], "video");
 
-  const namedPage = /["'](?:embed(?:url)?|player(?:url)?|iframe(?:url)?)["']\s*[:=]\s*["']([^"']+)["']/gi;
+  const namedPage = /["'](?:embed(?:url)?|player(?:url)?|iframe(?:url)?|watch(?:url)?|play(?:url)?|server(?:url)?)["']\s*[:=]\s*["']([^"']+)["']/gi;
   for (const match of text.matchAll(namedPage)) if (match[1]) addPage(match[1]);
+
+  const jsNavigations = /(?:window\.open\s*\(|(?:window\.)?location(?:\.href)?\s*=\s*)["']([^"']+)["']/gi;
+  for (const match of text.matchAll(jsNavigations)) if (match[1]) addPage(match[1]);
+
+  const dataUrls = /\bdata-(?:src|url|href|file|video|player|embed|server)=["']([^"']+)["']/gi;
+  for (const match of text.matchAll(dataUrls)) {
+    if (!match[1]) continue;
+    const resolved = safeResolvedUrl(match[1], baseUrl);
+    if (!resolved) continue;
+    const kind = mediaKind(resolved);
+    if (kind) add(resolved, kind); else addPage(resolved);
+  }
 
   const sourceTags = /<(?:source|video|audio)\b[^>]*>/gi;
   for (const tagMatch of text.matchAll(sourceTags)) {
@@ -242,7 +254,7 @@ export function extractMediaCandidates(markup: string, baseUrl: string): Extract
     if (subtitleLanguages.size > 0) subtitleEvidence = "page_text";
   }
 
-  const iframes = /<iframe\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
+  const iframes = /<iframe\b[^>]*\b(?:src|data-src)=["']([^"']+)["'][^>]*>/gi;
   for (const match of text.matchAll(iframes)) if (match[1]) addPage(match[1]);
 
   const anchors = /<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi;
@@ -251,11 +263,17 @@ export function extractMediaCandidates(markup: string, baseUrl: string): Extract
     if (href && /(?:watch|player|embed|stream|video|play|server)/i.test(href)) addPage(href);
   }
 
+  const forms = /<form\b[^>]*\baction=["']([^"']+)["'][^>]*>/gi;
+  for (const match of text.matchAll(forms)) {
+    const action = match[1];
+    if (action && /(?:watch|player|embed|stream|video|play|server)/i.test(action)) addPage(action);
+  }
+
   return {
-    hls: [...hls].slice(0, 16),
-    video: [...video].slice(0, 12),
+    hls: [...hls].slice(0, 24),
+    video: [...video].slice(0, 20),
     audio: [...audio].slice(0, 8),
-    pages: [...pages].slice(0, 10),
+    pages: [...pages].slice(0, 20),
     subtitleLanguages: [...subtitleLanguages],
     ...(subtitleEvidence ? { subtitleEvidence } : {}),
   };
@@ -430,7 +448,7 @@ async function discoverPage(
 
     const extracted = extractMediaCandidates(page.text, page.url);
     const pageSubtitles = pageSubtitlePatch(extracted);
-    const hlsChecks = await Promise.all(extracted.hls.slice(0, 6).map(async (hlsUrl) => inspectHls(hlsUrl, page.url)));
+    const hlsChecks = await Promise.all(extracted.hls.slice(0, 10).map(async (hlsUrl) => inspectHls(hlsUrl, page.url)));
     const hls = hlsChecks.find((item) => item.verified);
     if (hls) return mergeSubtitleMetadata({
       playable: true,
@@ -441,12 +459,12 @@ async function discoverPage(
       ...hlsInfoPatch(hls.info),
     }, pageSubtitles);
 
-    const videoChecks = await Promise.all(extracted.video.slice(0, 4).map(async (videoUrl) => inspectVideo(videoUrl, page.url)));
+    const videoChecks = await Promise.all(extracted.video.slice(0, 8).map(async (videoUrl) => inspectVideo(videoUrl, page.url)));
     const video = videoChecks.find((item) => item.verified);
     if (video) return { playable: true, playUrl: video.url, kind: "video", downloadable: true, downloadUrl: video.url, detectedBy: "html_media", ...pageSubtitles };
 
     const nestedResults = await Promise.all(
-      extracted.pages.slice(0, 3).map((nested) => discoverPage(nested, state, depth + 1, page.url)),
+      extracted.pages.slice(0, 6).map((nested) => discoverPage(nested, state, depth + 1, page.url)),
     );
     const nestedPlayable = nestedResults.find((item) => item.playable);
     if (nestedPlayable) return mergeSubtitleMetadata(nestedPlayable, pageSubtitles);
@@ -457,13 +475,13 @@ async function discoverPage(
 }
 
 export async function discoverPlayableMedia(pageUrl: string): Promise<Partial<DiscoveryResult>> {
-  await assertPublicHttpsUrl(pageUrl);
+  await assertPublicWebUrl(pageUrl);
   return discoverPage(pageUrl, { visited: new Set<string>(), pages: 0 }, 0);
 }
 
 export async function discoverObservedMedia(candidateUrl: string, originUrl: string): Promise<Partial<DiscoveryResult>> {
-  await assertPublicHttpsUrl(originUrl);
-  await assertPublicHttpsUrl(candidateUrl);
+  await assertPublicWebUrl(originUrl);
+  await assertPublicWebUrl(candidateUrl);
   const parsed = new URL(candidateUrl);
   const pathname = parsed.pathname.toLowerCase();
   const looksHls = pathname.endsWith(".m3u8") || /(?:m3u8|hls|playlist|manifest)/i.test(`${pathname}${parsed.search}`);

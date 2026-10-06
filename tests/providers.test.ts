@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { inferSourceKind, isAllowedProviderUrl, playableSource, providerFor } from "../src/domain/providers.js";
 
 describe("open web source helpers", () => {
-  it("accepts arbitrary public-shaped HTTPS hosts without a provider list", () => {
+  it("accepts arbitrary public-shaped HTTP/HTTPS hosts without a provider list", () => {
     expect(isAllowedProviderUrl("https://video.example.com/watch/1")).toBe(true);
-    expect(isAllowedProviderUrl("http://video.example.com/watch/1")).toBe(false);
+    expect(isAllowedProviderUrl("http://video.example.com/watch/1")).toBe(true);
     expect(isAllowedProviderUrl("not a URL")).toBe(false);
   });
 
@@ -13,7 +13,7 @@ describe("open web source helpers", () => {
       playable: true,
       kind: "hls",
     });
-    expect(playableSource("https://cdn.other.example/movie/file.mp4")).toMatchObject({
+    expect(playableSource("http://cdn.other.example/movie/file.mp4")).toMatchObject({
       playable: true,
       kind: "video",
       downloadable: true,

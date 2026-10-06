@@ -1,4 +1,4 @@
-# Any Movie Server 1.4.0
+# Any Movie Server 1.8.0
 
 خادم بحث عام واكتشاف وسائط لتطبيق Any Movie. لا توجد قائمة providers أو domains مفروضة على Tavily Search.
 
@@ -33,7 +33,7 @@
 
 ## الحماية
 
-- HTTPS عام فقط.
+- HTTP/HTTPS عام فقط.
 - حظر loopback/private/link-local وDNS destinations غير العامة.
 - حدود للredirects والحجم والمهلات وعمق الصفحات.
 - لا bypass لتسجيل الدخول/paywalls/DRM ولا استخراج مفاتيح تشفير.

@@ -8,7 +8,7 @@ import type { Candidate, ContentType, DiscoveryResult } from "./types.js";
 export type ProviderConfig = never;
 
 export function getProviders(): readonly never[] {
-  return [];
+  return [] as never[];
 }
 
 export function getProviderConfigSignature() {
@@ -23,10 +23,10 @@ export function getPlayableDomains() {
   return [] as string[];
 }
 
-function parsedPublicHttps(value: string) {
+function parsedPublicWebUrl(value: string) {
   try {
     const parsed = new URL(value);
-    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port) return undefined;
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.port) return undefined;
     if (!parsed.hostname.includes(".")) return undefined;
     return parsed;
   } catch {
@@ -39,19 +39,19 @@ export function providerPriorityFor(_value: string) {
 }
 
 export function isAllowedProviderUrl(value: string) {
-  return Boolean(parsedPublicHttps(value));
+  return Boolean(parsedPublicWebUrl(value));
 }
 
 export function isPlayableProviderUrl(value: string) {
-  return Boolean(parsedPublicHttps(value));
+  return Boolean(parsedPublicWebUrl(value));
 }
 
 export function providerFor(value: string) {
-  return parsedPublicHttps(value)?.hostname.toLowerCase().replace(/^www\./, "") ?? "web";
+  return parsedPublicWebUrl(value)?.hostname.toLowerCase().replace(/^www\./, "") ?? "web";
 }
 
 export function playableSource(value: string): Pick<DiscoveryResult, "playable" | "playUrl" | "hlsUrl" | "kind" | "downloadable" | "downloadUrl" | "detectedBy"> {
-  const parsed = parsedPublicHttps(value);
+  const parsed = parsedPublicWebUrl(value);
   if (!parsed) return { playable: false };
 
   if (/\.m3u8$/i.test(parsed.pathname)) {

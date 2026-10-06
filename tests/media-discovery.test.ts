@@ -22,9 +22,9 @@ describe("media discovery parser", () => {
     expect(found.hls).toContain("https://video.example.org/manifest?id=7");
   });
 
-  it("rejects non-HTTPS media candidates", () => {
+  it("accepts HTTP media candidates as well as HTTPS", () => {
     const found = extractMediaCandidates(`<source src="http://cdn.example.com/movie.mp4">`, "https://video.example.org/watch");
-    expect(found.video).toEqual([]);
+    expect(found.video).toContain("http://cdn.example.com/movie.mp4");
   });
 
   it("detects subtitle tracks and Arabic subtitle hints", () => {

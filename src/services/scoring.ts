@@ -32,7 +32,7 @@ export function makeCandidates(results: TavilyResult[], knownTitles: string[]) {
     let normalized: string;
     try {
       const parsed = new URL(item.url);
-      if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port) continue;
+      if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.port) continue;
       parsed.hash = "";
       normalized = parsed.href;
     } catch {
@@ -60,7 +60,16 @@ export function makeCandidates(results: TavilyResult[], knownTitles: string[]) {
       inferredKind: kind,
       providerPriority: 0,
     };
-  }).sort((a, b) => b.heuristicScore - a.heuristicScore).slice(0, 80);
+  }).sort((a, b) => b.heuristicScore - a.heuristicScore).slice(0, 180);
+}
+
+
+function subtitleHints(value: string) {
+  const hints: string[] = [];
+  if (/(?:arabic subtitles?|arabic subbed|ترجمة عربية|مترجم(?:ة)?(?:\s+ب)?العربية|مترجم عربي|مترجم)/i.test(value)) hints.push("ar");
+  if (/(?:english subtitles?|eng(?:lish)? subbed)/i.test(value)) hints.push("en");
+  if (/(?:turkish subtitles?|türkçe altyazı)/i.test(value)) hints.push("tr");
+  return [...new Set(hints)];
 }
 
 export function toDiscoveryResult(
@@ -73,6 +82,7 @@ export function toDiscoveryResult(
     : candidate.inferredKind === "full_movie" || selected.source_kind === "full_movie"
       ? "full_movie"
       : "availability_page";
+  const subtitleLanguages = subtitleHints(`${candidate.title} ${candidate.content}`);
   return {
     id: candidate.id,
     title: selected.title?.trim() || candidate.title,
@@ -83,6 +93,7 @@ export function toDiscoveryResult(
     contentType,
     providerPriority: 1,
     confidence: Math.max(0, Math.min(1, Number(candidate.heuristicScore.toFixed(3)))),
+    ...(subtitleLanguages.length > 0 ? { subtitleLanguages, subtitleEvidence: "page_text" as const } : {}),
     ...source,
   };
 }

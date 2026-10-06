@@ -46,10 +46,10 @@ export const openApiDocument = {
     },
     "/api/v1/media": {
       post: {
-        summary: "Inspect any public HTTPS page for direct video or HLS",
+        summary: "Inspect any public HTTP/HTTPS page for direct video or HLS",
         requestBody: {
           required: true,
-          content: { "application/json": { schema: { type: "object", required: ["url"], properties: { url: { type: "string", format: "uri" }, originUrl: { type: "string", format: "uri", description: "Optional public HTTPS page that originated an observed media request." } } } } },
+          content: { "application/json": { schema: { type: "object", required: ["url"], properties: { url: { type: "string", format: "uri" }, originUrl: { type: "string", format: "uri", description: "Optional public HTTP/HTTPS page that originated an observed media request." } } } } },
         },
         responses: { "200": { description: "Detected media" }, "400": { description: "Invalid or unsafe URL" }, "429": { description: "Rate limited" } },
       },
