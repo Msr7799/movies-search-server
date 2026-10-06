@@ -10,7 +10,9 @@ export type DiscoveryResult = {
   contentType: ContentType;
   playable: boolean;
   playUrl?: string;
-  kind?: "video" | "embed";
+  hlsUrl?: string;
+  kind?: "video" | "hls" | "embed";
+  providerPriority: number;
   confidence: number;
 };
 
@@ -55,4 +57,5 @@ export type Candidate = {
   heuristicScore: number;
   playable: boolean;
   inferredKind: ContentType;
+  providerPriority: number;
 };

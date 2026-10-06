@@ -1,4 +1,4 @@
-import { inferSourceKind, playableSource, providerFor } from "../domain/providers.js";
+import { inferSourceKind, playableSource, providerFor, providerPriorityFor } from "../domain/providers.js";
 import type { Candidate, ContentType, DiscoveryResult, TavilyResult } from "../domain/types.js";
 
 export function normalizeText(value: string) {
@@ -48,8 +48,9 @@ export function makeCandidates(results: TavilyResult[], knownTitles: string[]) {
       heuristicScore: similarity * 0.55 + (item.score ?? 0) * 0.25 + kindBoost + playableBoost,
       playable: source.playable,
       inferredKind: kind,
+      providerPriority: providerPriorityFor(url),
     };
-  }).sort((a, b) => b.heuristicScore - a.heuristicScore).slice(0, 20);
+  }).sort((a, b) => a.providerPriority - b.providerPriority || b.heuristicScore - a.heuristicScore).slice(0, 20);
 }
 
 export function toDiscoveryResult(
@@ -70,6 +71,7 @@ export function toDiscoveryResult(
     description: selected.description?.trim() || candidate.content.slice(0, 220),
     reason: selected.reason?.trim() || "نتيجة من مزود عرض قانوني معروف.",
     contentType,
+    providerPriority: candidate.providerPriority + 1,
     confidence: Math.max(0, Math.min(1, Number(candidate.heuristicScore.toFixed(3)))),
     ...source,
   };

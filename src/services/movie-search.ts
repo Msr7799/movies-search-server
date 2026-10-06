@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import { LEGAL_DOMAINS, PLAYABLE_DOMAINS, isAllowedProviderUrl } from "../domain/providers.js";
+import { getPlayableDomains, getProviderDomains, isAllowedProviderUrl } from "../domain/providers.js";
 import type { ContentType, DiscoveryResponse } from "../domain/types.js";
 import { geminiJson } from "./gemini.js";
 import { makeCandidates, normalizeText, toDiscoveryResult } from "./scoring.js";
@@ -57,10 +57,12 @@ export async function searchMovies(input: SearchInput, requestId: string): Promi
     : `"${title}" ${original} ${understanding.year} official "full movie" complete film ${input.movieLanguage} -trailer -teaser -clip -scene -song -review`;
   const availabilityQuery = `"${title}" ${understanding.year} watch legally ${config.region} ${input.subtitleLanguage}`;
   const aiQuery = understanding.search_queries.map((item) => item.trim()).find(Boolean);
+  const providerDomains = getProviderDomains();
+  const playableDomains = getPlayableDomains();
   const searches = [
-    tavilySearch(fullMovieQuery, PLAYABLE_DOMAINS),
-    tavilySearch(availabilityQuery, LEGAL_DOMAINS),
-    ...(aiQuery ? [tavilySearch(aiQuery, LEGAL_DOMAINS)] : []),
+    ...(playableDomains.length > 0 ? [tavilySearch(fullMovieQuery, playableDomains)] : []),
+    tavilySearch(availabilityQuery, providerDomains),
+    ...(aiQuery ? [tavilySearch(aiQuery, providerDomains)] : []),
   ];
   const settled = await Promise.allSettled(searches);
   const partial = settled.some((item) => item.status === "rejected");
@@ -81,7 +83,7 @@ export async function searchMovies(input: SearchInput, requestId: string): Promi
   try {
     ranking = await geminiJson<Ranking>({
       key: "GEMINI_API_KEY", models: config.searchModels, timeoutMs: 12_000, schema: rankingSchema,
-      prompt: `Rank the supplied legal-source candidates for the identified movie. Reply in the language of the user query. Select at most five IDs; never invent IDs or URLs. Prefer exact-title official full movies, then legal availability pages. A video is full_movie only with explicit full/complete evidence. Trailers, clips, scenes, songs, reviews and uncertain hosted videos are short_clip. ${input.allowShortClips ? "Short clips are allowed after full movies." : "Exclude all short_clip candidates."} Never claim subtitle availability without evidence. Movie: ${JSON.stringify({ title, original, year: understanding.year, aliases: understanding.aliases })}. User query: ${JSON.stringify(input.query)}. Candidates: ${JSON.stringify(candidates)}`,
+      prompt: `Rank the supplied legal-source candidates for the identified movie. Reply in the language of the user query. Select at most five IDs; never invent IDs or URLs. Respect providerPriority (1 is the highest configured priority), then prefer exact-title official full movies and legal availability pages within that provider. A video is full_movie only with explicit full/complete evidence. Trailers, clips, scenes, songs, reviews and uncertain hosted videos are short_clip. ${input.allowShortClips ? "Short clips are allowed after full movies." : "Exclude all short_clip candidates."} Never claim subtitle availability without evidence. Movie: ${JSON.stringify({ title, original, year: understanding.year, aliases: understanding.aliases })}. User query: ${JSON.stringify(input.query)}. Candidates: ${JSON.stringify(candidates.map((candidate) => ({ ...candidate, providerPriority: candidate.providerPriority + 1 })))}`,
     });
   } catch {
     ranking = {
@@ -94,13 +96,19 @@ export async function searchMovies(input: SearchInput, requestId: string): Promi
   const deterministicFull = candidates
     .filter((item) => item.playable && item.inferredKind === "full_movie" && knownTitles.some((known) => normalizeText(item.title).includes(normalizeText(known))))
     .map((item) => ({ id: item.id, title: item.title, description: item.content.slice(0, 220), reason: "مصدر قانوني قابل للتشغيل مع دليل واضح على الفيلم الكامل.", source_kind: "full_movie" as const }));
-  const selections = [...deterministicFull, ...ranking.selected].filter((item, index, all) => all.findIndex((other) => other.id === item.id) === index);
+  const rankedFallback = candidates.map((item) => ({
+    id: item.id, title: item.title, description: item.content.slice(0, 220),
+    reason: "Result from a configured legal provider, ordered by provider priority.", source_kind: item.inferredKind,
+  }));
+  const selections = [...deterministicFull, ...ranking.selected, ...rankedFallback].filter((item, index, all) => all.findIndex((other) => other.id === item.id) === index);
   const results = selections.flatMap((selected) => {
     const candidate = byId.get(selected.id);
     if (!candidate) return [];
     const result = toDiscoveryResult(candidate, selected);
     return !input.allowShortClips && result.contentType === "short_clip" ? [] : [result];
-  }).filter((item, index, all) => all.findIndex((other) => other.url === item.url) === index).slice(0, 5);
+  }).filter((item, index, all) => all.findIndex((other) => other.url === item.url) === index)
+    .sort((a, b) => a.providerPriority - b.providerPriority || b.confidence - a.confidence)
+    .slice(0, 5);
 
   return {
     understoodTitle: title,
