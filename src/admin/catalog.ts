@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { database } from "../infrastructure/mongodb.js";
-import { tmdbMetadata, type MediaType, type MovieMetadata } from "../services/movie-metadata.js";
+import { tmdbMetadata, type MediaType, type MovieMetadata, type Person } from "../services/movie-metadata.js";
 
 export type CatalogStatus = "metadata_only" | "draft" | "published" | "archived";
 export type CatalogSource = { id?: string; url: string; quality: string; resolution?: string; bandwidth?: number; master?: string };
@@ -27,8 +27,8 @@ export type CatalogMovie = {
   genres?: string[];
   images?: string[];
   trailers?: string[];
-  cast?: Array<{ id: string; name: string; role?: string; image?: string }>;
-  directors?: Array<{ id: string; name: string; role?: string; image?: string }>;
+  cast?: Person[];
+  directors?: Person[];
 };
 
 function webUrl(value: unknown) {
