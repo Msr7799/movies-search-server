@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import discover from "../src/routes/discover.js";
+import { endpoint } from "../src/http/handler.js";
 import openapi from "../src/routes/openapi.js";
 import suggest from "../src/routes/suggest.js";
 import adminCatalog from "../src/routes/admin/catalog.js";
@@ -24,6 +25,7 @@ type RouteHandler = (request: VercelRequest, response: VercelResponse) => unknow
 
 const routes: Record<string, RouteHandler> = {
   "/api/discover": discover,
+  "/api": endpoint(["GET"], () => ({status:"ok", name:"Any Movie API", version:"2.3.0", health:"/api/v1/health"})),
   "/api/openapi": openapi,
   "/api/suggest": suggest,
   "/api/admin/catalog": adminCatalog,
