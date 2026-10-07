@@ -191,18 +191,38 @@ export async function updateCatalogMovie(id: string, changes: {
   sortOrder?: number;
   categories?: string[];
   status?: CatalogStatus;
+  sources?: CatalogSource[];
 }) {
   const title = changes.title === undefined ? undefined : text(changes.title, 180);
   if (changes.title !== undefined && !title) throw new Error("INVALID_TITLE");
   const categories = changes.categories === undefined
     ? undefined
     : [...new Set(changes.categories.map((category) => text(category, 60)).filter(Boolean))].slice(0, 12);
+  const sources = changes.sources?.slice(0, 40).flatMap((source) => {
+    const url = hlsUrl(source.url);
+    if (!url) return [];
+    const master = source.master ? hlsUrl(source.master) : undefined;
+    return [{
+      ...(source.id ? { id: text(source.id, 40) } : {}),
+      url,
+      quality: text(source.quality, 60) || "HLS",
+      ...(source.resolution ? { resolution: text(source.resolution, 30) } : {}),
+      ...(typeof source.bandwidth === "number" && Number.isFinite(source.bandwidth)
+        ? { bandwidth: Math.max(0, Math.round(source.bandwidth)) }
+        : {}),
+      ...(master ? { master } : {}),
+    }];
+  });
+  if (changes.sources !== undefined && sources?.length !== changes.sources.length) {
+    throw new Error("INVALID_HLS_SOURCE");
+  }
   const update = {
     ...(title !== undefined ? { title } : {}),
     ...(changes.description !== undefined ? { description: text(changes.description, 2_000) } : {}),
     ...(changes.sortOrder !== undefined ? { sortOrder: Math.max(0, Math.round(changes.sortOrder)) } : {}),
     ...(categories !== undefined ? { categories } : {}),
     ...(changes.status !== undefined ? { status: changes.status } : {}),
+    ...(sources !== undefined ? { sources } : {}),
     updatedAt: new Date().toISOString(),
   };
   const db = await database();

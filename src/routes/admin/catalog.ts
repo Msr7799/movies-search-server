@@ -1,6 +1,6 @@
 import type { VercelRequest } from "@vercel/node";
 import { requireAdmin } from "../../admin/auth.js";
-import { deleteCatalogMovie, importCatalog, listCatalog, updateCatalogMovie } from "../../admin/catalog.js";
+import { deleteCatalogMovie, importCatalog, listCatalog, updateCatalogMovie, type CatalogSource } from "../../admin/catalog.js";
 import { AppError } from "../../http/errors.js";
 import { endpoint } from "../../http/handler.js";
 
@@ -22,12 +22,36 @@ async function controller(request: VercelRequest) {
     if (!/^[a-f0-9]{24}$/.test(id)) throw new AppError(400, "INVALID_ID", "معرّف الفيلم غير صالح.");
     const categories = Array.isArray(wrapper.categories) ? wrapper.categories.filter((value): value is string => typeof value === "string") : undefined;
     const status = ["metadata_only", "draft", "published", "archived"].includes(String(wrapper.status)) ? String(wrapper.status) as "metadata_only" | "draft" | "published" | "archived" : undefined;
+    let sources: CatalogSource[] | undefined;
+    if (wrapper.sources !== undefined) {
+      if (!Array.isArray(wrapper.sources) || wrapper.sources.length > 40) {
+        throw new AppError(400, "INVALID_HLS_SOURCE", "قائمة روابط HLS غير صالحة.");
+      }
+      sources = wrapper.sources.map((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) {
+          throw new AppError(400, "INVALID_HLS_SOURCE", "رابط HLS غير صالح.");
+        }
+        const source = item as Record<string, unknown>;
+        if (typeof source.url !== "string" || typeof source.quality !== "string") {
+          throw new AppError(400, "INVALID_HLS_SOURCE", "رابط HLS أو الجودة غير صالحة.");
+        }
+        return {
+          url: source.url,
+          quality: source.quality,
+          ...(typeof source.id === "string" ? { id: source.id } : {}),
+          ...(typeof source.resolution === "string" ? { resolution: source.resolution } : {}),
+          ...(typeof source.bandwidth === "number" ? { bandwidth: source.bandwidth } : {}),
+          ...(typeof source.master === "string" ? { master: source.master } : {}),
+        };
+      });
+    }
     const updated = await updateCatalogMovie(id, {
       ...(typeof wrapper.title === "string" ? { title: wrapper.title } : {}),
       ...(typeof wrapper.description === "string" ? { description: wrapper.description } : {}),
       ...(typeof wrapper.sortOrder === "number" && Number.isFinite(wrapper.sortOrder) ? { sortOrder: wrapper.sortOrder } : {}),
       ...(categories ? { categories } : {}),
       ...(status ? { status } : {}),
+      ...(sources !== undefined ? { sources } : {}),
     });
     if (!updated) throw new AppError(404, "MOVIE_NOT_FOUND", "الفيلم غير موجود.");
     return { movie: updated };
