@@ -1,9 +1,9 @@
 import type { VercelRequest } from "@vercel/node";
 import { z } from "zod";
-import { requireAdmin } from "../../src/admin/auth.js";
-import { publicSettings, updateSettings, type ManagedKey } from "../../src/admin/settings.js";
-import { parseBody } from "../../src/http/body.js";
-import { endpoint } from "../../src/http/handler.js";
+import { requireAdmin } from "../../admin/auth.js";
+import { publicSettings, updateSettings, type ManagedKey } from "../../admin/settings.js";
+import { parseBody } from "../../http/body.js";
+import { endpoint } from "../../http/handler.js";
 
 const providerSchema = z.object({
   id: z.string().trim().min(1).max(80),

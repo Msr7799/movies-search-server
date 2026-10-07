@@ -1,7 +1,7 @@
 import type { VercelRequest } from "@vercel/node";
-import { endpoint } from "../../../src/http/handler.js";
-import { searchTmdb, type MediaType } from "../../../src/services/movie-metadata.js";
-import { AppError } from "../../../src/http/errors.js";
+import { endpoint } from "../../../http/handler.js";
+import { searchTmdb, type MediaType } from "../../../services/movie-metadata.js";
+import { AppError } from "../../../http/errors.js";
 
 export default endpoint(["GET"], async (request: VercelRequest) => {
   const q = typeof request.query.q === "string" ? request.query.q.trim() : "";

@@ -1,9 +1,9 @@
 import type { VercelRequest } from "@vercel/node";
-import { requireAdmin } from "../../../src/admin/auth.js";
-import { ensureCatalogFromTmdb } from "../../../src/admin/catalog.js";
-import { AppError } from "../../../src/http/errors.js";
-import { endpoint } from "../../../src/http/handler.js";
-import type { MediaType } from "../../../src/services/movie-metadata.js";
+import { requireAdmin } from "../../../admin/auth.js";
+import { ensureCatalogFromTmdb } from "../../../admin/catalog.js";
+import { AppError } from "../../../http/errors.js";
+import { endpoint } from "../../../http/handler.js";
+import type { MediaType } from "../../../services/movie-metadata.js";
 
 export default endpoint(["POST"], async (request: VercelRequest) => {
   requireAdmin(request);

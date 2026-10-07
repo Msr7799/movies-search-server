@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { ADMIN_COOKIE, adminConfigured, adminCookie, createAdminToken, validAdminCredentials } from "../../src/admin/auth.js";
-import { incrementWindow } from "../../src/infrastructure/store.js";
+import { ADMIN_COOKIE, adminConfigured, adminCookie, createAdminToken, validAdminCredentials } from "../../admin/auth.js";
+import { incrementWindow } from "../../infrastructure/store.js";
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   response.setHeader("Cache-Control", "no-store");

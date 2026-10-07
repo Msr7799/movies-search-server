@@ -1,8 +1,8 @@
 import type { VercelRequest } from "@vercel/node";
-import { requireAdmin } from "../../src/admin/auth.js";
-import { deleteCatalogMovie, importCatalog, listCatalog, updateCatalogMovie } from "../../src/admin/catalog.js";
-import { AppError } from "../../src/http/errors.js";
-import { endpoint } from "../../src/http/handler.js";
+import { requireAdmin } from "../../admin/auth.js";
+import { deleteCatalogMovie, importCatalog, listCatalog, updateCatalogMovie } from "../../admin/catalog.js";
+import { AppError } from "../../http/errors.js";
+import { endpoint } from "../../http/handler.js";
 
 async function controller(request: VercelRequest) {
   requireAdmin(request);

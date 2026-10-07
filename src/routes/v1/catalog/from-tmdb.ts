@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import type { VercelRequest } from "@vercel/node";
-import { endpoint } from "../../../src/http/handler.js";
-import { AppError } from "../../../src/http/errors.js";
-import { tmdbMetadata, type MediaType } from "../../../src/services/movie-metadata.js";
+import { endpoint } from "../../../http/handler.js";
+import { AppError } from "../../../http/errors.js";
+import { tmdbMetadata, type MediaType } from "../../../services/movie-metadata.js";
 
 function idFor(tmdbId: number, mediaType: MediaType) {
   return createHash("sha256").update(`tmdb:${mediaType}:${tmdbId}`).digest("hex").slice(0, 24);
