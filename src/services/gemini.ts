@@ -15,7 +15,7 @@ export async function geminiJson<T>(options: {
   key: GeminiKey;
   timeoutMs: number;
 }): Promise<T> {
-  const apiKey = requireEnv(options.key);
+  const apiKey = await requireEnv(options.key);
   const failures: string[] = [];
 
   for (const model of options.models) {

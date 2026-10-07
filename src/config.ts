@@ -1,10 +1,11 @@
+import { effectiveSecret, type ManagedKey } from "./admin/settings.js";
+
 function integer(name: string, fallback: number, min: number, max: number) {
   const value = Number.parseInt(process.env[name] ?? "", 10);
   return Number.isFinite(value)
     ? Math.min(max, Math.max(min, value))
     : fallback;
 }
-
 function csv(value: string | undefined, fallback: string[]) {
   const values =
     value
@@ -73,19 +74,22 @@ export const config = {
   },
 };
 
-export function requireEnv(
-  name: "TAVILY_API_KEY" | "GEMINI_API_KEY" | "GEMINI_AUTO_SUGGESTED_API_KEY",
-) {
-  const value = process.env[name]?.trim();
+export async function requireEnv(name: ManagedKey) {
+  const value = await effectiveSecret(name);
   if (!value) throw new Error(`MISSING_ENV:${name}`);
   return value;
 }
 
-export function serviceReadiness() {
+export async function serviceReadiness() {
+  const [tavily, geminiSearch, geminiSuggestions] = await Promise.all([
+    effectiveSecret("TAVILY_API_KEY"),
+    effectiveSecret("GEMINI_API_KEY"),
+    effectiveSecret("GEMINI_AUTO_SUGGESTED_API_KEY"),
+  ]);
   return {
-    tavily: Boolean(process.env.TAVILY_API_KEY),
-    geminiSearch: Boolean(process.env.GEMINI_API_KEY),
-    geminiSuggestions: Boolean(process.env.GEMINI_AUTO_SUGGESTED_API_KEY),
+    tavily: Boolean(tavily),
+    geminiSearch: Boolean(geminiSearch),
+    geminiSuggestions: Boolean(geminiSuggestions),
     distributedStore: Boolean(
       process.env.UPSTASH_REDIS_REST_URL &&
       process.env.UPSTASH_REDIS_REST_TOKEN,

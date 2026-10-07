@@ -1,32 +1,7 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex, nofollow" />
-    <title>Any Movie API</title>
-    <style>
-      :root { color-scheme: dark; font-family: system-ui, "Segoe UI", sans-serif; }
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #090b10; color: #f7f7f8; }
-      main { width: min(720px, calc(100% - 40px)); padding: 36px; border: 1px solid #292d38; border-radius: 24px; background: #11141c; box-sizing: border-box; }
-      h1 { margin: 0 0 12px; font-size: clamp(2rem, 7vw, 3.5rem); }
-      p { color: #b9bfcc; line-height: 1.8; }
-      ul { margin: 24px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; direction: ltr; text-align: left; }
-      a { display: block; padding: 13px 16px; border-radius: 12px; color: #b9e4ff; background: #191e29; text-decoration: none; font-family: ui-monospace, monospace; }
-      a:hover { background: #222a38; }
-      small { display: block; margin-top: 24px; color: #7f8797; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>Any Movie API</h1>
-      <p>الخادم يعمل. استخدم الروابط التالية لفحص الجاهزية وعقد الواجهة ومزوّدي العرض القانونيين.</p>
-      <ul>
-        <li><a href="/api/v1/health">GET /api/v1/health</a></li>
-        <li><a href="/api/v1/providers">GET /api/v1/providers</a></li>
-        <li><a href="/api/openapi">GET /api/openapi</a></li>
-      </ul>
-      <small>Search and suggestion endpoints accept POST requests only.</small>
-    </main>
-  </body>
-</html>
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#07111f"><title>Any Movie Server — Control Center</title><link rel="stylesheet" href="/control.css"></head>
+<body><div class="glow one"></div><div class="glow two"></div><main class="shell">
+<header class="top"><div class="brand"><span class="logo">AM</span><div><small>DISCOVERY INFRASTRUCTURE</small><h1>Any Movie Server</h1></div></div><div class="top-actions"><span id="live" class="pill idle"><i></i>بانتظار الفحص</span><a class="button primary" href="/admin">إدارة السيرفر</a></div></header>
+<section class="hero card"><div><small>CONTROL & OBSERVABILITY</small><h2>مراقبة مركزية لخدمات البحث والكتالوج.</h2><p>افحص Tavily وGemini وMongoDB والبروفايدرز من واجهة آمنة واحدة.</p></div><div class="actions"><button id="health">فحص شامل</button><button id="catalog">فحص الكتالوج</button></div></section>
+<section class="metrics"><article class="card metric"><b>API</b><span>الخادم</span><strong id="api">غير مفحوص</strong></article><article class="card metric"><b>DB</b><span>MongoDB</span><strong id="mongo">غير مفحوص</strong></article><article class="card metric"><b>AI</b><span>Gemini</span><strong id="gemini">غير مفحوص</strong></article><article class="card metric"><b>WEB</b><span>Tavily</span><strong id="tavily">غير مفحوص</strong></article><article class="card metric"><b>MS</b><span>الاستجابة</span><strong id="latency">—</strong></article></section>
+<section class="grid"><article class="card panel"><div class="heading"><div><small>ENDPOINTS</small><h3>واجهات الخدمة</h3></div><button id="copy">نسخ الأساس</button></div><div class="routes"><a href="/api/v1/health"><code>GET /api/v1/health</code><span>الصحة والخدمات</span></a><a href="/api/v1/providers"><code>GET /api/v1/providers</code><span>البروفايدرز</span></a><a href="/api/v1/catalog"><code>GET /api/v1/catalog</code><span>كتالوج الأفلام العام</span></a><a href="/api/openapi"><code>GET /api/openapi</code><span>OpenAPI</span></a></div></article><article class="card panel"><div class="heading"><div><small>LIVE DEBUG</small><h3>سجل التشخيص</h3></div><button id="clear">مسح</button></div><div id="empty" class="empty">ابدأ الفحص لعرض تفاصيل الاستجابة.</div><div id="log" class="log"></div></article></section>
+<footer><span>Any Movie Server v2.1</span><span id="clock">—</span></footer></main><script src="/dashboard.js" defer></script></body></html>

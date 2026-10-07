@@ -2,7 +2,7 @@ export const openApiDocument = {
   openapi: "3.1.0",
   info: {
     title: "Any Movie API",
-    version: "1.4.0",
+    version: "2.1.0",
     description:
       "Arabic-first open-web movie media discovery API for web and mobile clients.",
   },
@@ -18,6 +18,12 @@ export const openApiDocument = {
       get: {
         summary: "Discovery mode (open web; no provider allow-list)",
         responses: { "200": { description: "Provider list" } },
+      },
+    },
+    "/api/v1/catalog": {
+      get: {
+        summary: "Public centrally managed HLS catalog",
+        responses: { "200": { description: "Public movie catalog" } },
       },
     },
     "/api/v1/suggestions": {

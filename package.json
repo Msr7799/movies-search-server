@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@vercel/node": "^5.5.20",
+    "mongodb": "^6.21.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

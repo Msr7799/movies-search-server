@@ -1,4 +1,4 @@
-# Any Movie Server 1.9.0
+# Any Movie Server 2.1.0
 
 خادم بحث عام واكتشاف وسائط لتطبيق Any Movie. لا توجد قائمة providers أو domains مفروضة على Tavily Search.
 
@@ -46,6 +46,13 @@ TAVILY_API_KEY=
 GEMINI_API_KEY=
 GEMINI_AUTO_SUGGESTED_API_KEY=
 
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=use-at-least-12-characters
+ADMIN_SESSION_SECRET=use-at-least-32-random-characters
+
+MONGODB_URI=
+MONGODB_DATABASE=any_movie_control
+
 TAVILY_SEARCH_DEPTH=advanced
 TAVILY_MAX_RESULTS=20
 TAVILY_CRAWL_ROOTS=2
@@ -61,6 +68,16 @@ Upstash موصى به للكاش/rate-limit الموزع.
 - `POST /api/v1/suggestions`
 - `GET /api/v1/providers` للتوافق فقط؛ يرجع `mode: open_web`
 - `GET /api/v1/health`
+- `GET /api/v1/catalog` الكتالوج العام المستورد من لوحة الإدارة
+- `GET /admin` لوحة إدارة المفاتيح والبروفايدرز وكتالوج HLS
+
+## لوحة الإدارة
+
+تُحفظ مفاتيح Tavily وGemini الإضافية مشفرة في MongoDB ولا تعاد قيمها إلى
+المتصفح. يمكن إضافة providers مرتبة واستيراد JSON من HLS Collector. المستورد
+يقبل HTTPS HLS فقط، يتجاهل telemetry والملفات غير المرئية، ويحتاج تأكيد حقوق
+النشر قبل الحفظ. هذا الخادم مخصص لعملاء تطبيق Kotlin ولا تعتمد عليه واجهة
+`any-movie-web`.
 
 ## Search behavior in 1.9.0
 

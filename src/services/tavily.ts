@@ -5,7 +5,7 @@ import { withRetry } from "../infrastructure/retry.js";
 type TavilyCrawlResult = { url?: string; raw_content?: string; content?: string };
 
 async function tavilyPost(path: string, body: Record<string, unknown>, timeoutMs: number) {
-  const apiKey = requireEnv("TAVILY_API_KEY");
+  const apiKey = await requireEnv("TAVILY_API_KEY");
   return withRetry(async () => {
     const response = await fetch(`https://api.tavily.com${path}`, {
       method: "POST",

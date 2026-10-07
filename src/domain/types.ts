@@ -23,7 +23,14 @@ export type DiscoveryResult = {
   kind?: "video" | "hls" | "embed";
   downloadable?: boolean;
   downloadUrl?: string;
-  detectedBy?: "direct_url" | "content_type" | "html_manifest" | "html_media" | "provider_api" | "webview_observed" | "webview_candidate";
+  detectedBy?:
+    | "direct_url"
+    | "content_type"
+    | "html_manifest"
+    | "html_media"
+    | "provider_api"
+    | "webview_observed"
+    | "webview_candidate";
   hlsMaster?: boolean;
   hlsVariantCount?: number;
   hlsAudioRenditionCount?: number;

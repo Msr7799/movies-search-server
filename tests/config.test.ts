@@ -10,15 +10,15 @@ describe("configuration", () => {
     expect(config.searchLimit).toBe(100);
   });
 
-  it("never returns secret values in readiness", () => {
+  it("never returns secret values in readiness", async () => {
     process.env.TAVILY_API_KEY = "secret";
-    const readiness = serviceReadiness();
+    const readiness = await serviceReadiness();
     expect(readiness.tavily).toBe(true);
     expect(JSON.stringify(readiness)).not.toContain("secret");
   });
 
-  it("requires server credentials lazily", () => {
+  it("requires server credentials lazily", async () => {
     delete process.env.GEMINI_API_KEY;
-    expect(() => requireEnv("GEMINI_API_KEY")).toThrow("MISSING_ENV:GEMINI_API_KEY");
+    await expect(requireEnv("GEMINI_API_KEY")).rejects.toThrow("MISSING_ENV:GEMINI_API_KEY");
   });
 });

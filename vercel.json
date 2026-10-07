@@ -2,12 +2,16 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/admin", "destination": "/admin.html" }
+  ],
   "functions": {
     "api/v1/search.ts": { "maxDuration": 60 },
     "api/v1/media.ts": { "maxDuration": 20 },
     "api/discover.ts": { "maxDuration": 60 },
     "api/v1/suggestions.ts": { "maxDuration": 20 },
-    "api/suggest.ts": { "maxDuration": 20 }
+    "api/suggest.ts": { "maxDuration": 20 },
+    "api/admin/catalog.ts": { "maxDuration": 30 }
   },
   "headers": [
     {

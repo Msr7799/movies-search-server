@@ -10,32 +10,78 @@ import { searchMovies } from "../services/movie-search.js";
 import { parseBody } from "../http/body.js";
 import { assertJsonBodySize, type RequestContext } from "../http/handler.js";
 
-const schema = z.object({
-  query: z.string().trim().min(2, "اكتب حرفين على الأقل.").max(120, "الحد الأقصى 120 حرفًا."),
-  movieLanguage: z.enum(Object.keys(MOVIE_LANGUAGES) as [keyof typeof MOVIE_LANGUAGES, ...(keyof typeof MOVIE_LANGUAGES)[]]).default("any"),
-  subtitleLanguage: z.enum(Object.keys(SUBTITLE_LANGUAGES) as [keyof typeof SUBTITLE_LANGUAGES, ...(keyof typeof SUBTITLE_LANGUAGES)[]]).default("any"),
-  allowShortClips: z.boolean().default(false),
-  resultLimit: z.number().int().min(5).max(30).default(10),
-}).strict();
+const schema = z
+  .object({
+    query: z
+      .string()
+      .trim()
+      .min(2, "اكتب حرفين على الأقل.")
+      .max(120, "الحد الأقصى 120 حرفًا."),
+    movieLanguage: z
+      .enum(
+        Object.keys(MOVIE_LANGUAGES) as [
+          keyof typeof MOVIE_LANGUAGES,
+          ...(keyof typeof MOVIE_LANGUAGES)[],
+        ],
+      )
+      .default("any"),
+    subtitleLanguage: z
+      .enum(
+        Object.keys(SUBTITLE_LANGUAGES) as [
+          keyof typeof SUBTITLE_LANGUAGES,
+          ...(keyof typeof SUBTITLE_LANGUAGES)[],
+        ],
+      )
+      .default("any"),
+    allowShortClips: z.boolean().default(false),
+    resultLimit: z.number().int().min(5).max(30).default(10),
+  })
+  .strict();
 
-export async function searchController(request: VercelRequest, context: RequestContext) {
+export async function searchController(
+  request: VercelRequest,
+  context: RequestContext,
+) {
   assertJsonBodySize(request);
   const input = parseBody(request, schema);
   await enforceRateLimit("search", context.ip, config.searchLimit, 600);
-  const normalized = { ...input, query: input.query.toLocaleLowerCase().normalize("NFKC") };
-  const hash = createHash("sha256").update(JSON.stringify({ ...normalized, discovery: "open-web-v5-indexed-player-pages" })).digest("hex");
+  const normalized = {
+    ...input,
+    query: input.query.toLocaleLowerCase().normalize("NFKC"),
+  };
+  const hash = createHash("sha256")
+    .update(
+      JSON.stringify({
+        ...normalized,
+        discovery: "open-web-v5-indexed-player-pages",
+      }),
+    )
+    .digest("hex");
   const cacheKey = `search:v9:${hash}`;
   const cached = await cacheGet<DiscoveryResponse>(cacheKey);
-  if (cached) return { ...cached, meta: { ...cached.meta, requestId: context.requestId, cached: true } };
+  if (cached)
+    return {
+      ...cached,
+      meta: { ...cached.meta, requestId: context.requestId, cached: true },
+    };
 
-  const response = await searchMovies({
-    query: input.query,
-    movieLanguage: MOVIE_LANGUAGES[input.movieLanguage],
-    subtitleLanguage: input.subtitleLanguage,
-    subtitleLanguageLabel: SUBTITLE_LANGUAGES[input.subtitleLanguage],
-    allowShortClips: input.allowShortClips,
-    resultLimit: input.resultLimit,
-  }, context.requestId);
-  await cacheSet(cacheKey, response, response.results.length === 0 ? Math.min(config.searchCacheSeconds, 600) : config.searchCacheSeconds);
+  const response = await searchMovies(
+    {
+      query: input.query,
+      movieLanguage: MOVIE_LANGUAGES[input.movieLanguage],
+      subtitleLanguage: input.subtitleLanguage,
+      subtitleLanguageLabel: SUBTITLE_LANGUAGES[input.subtitleLanguage],
+      allowShortClips: input.allowShortClips,
+      resultLimit: input.resultLimit,
+    },
+    context.requestId,
+  );
+  await cacheSet(
+    cacheKey,
+    response,
+    response.results.length === 0
+      ? Math.min(config.searchCacheSeconds, 600)
+      : config.searchCacheSeconds,
+  );
   return response;
 }
