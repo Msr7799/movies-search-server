@@ -113,7 +113,8 @@ export async function searchTmdb(rawQuery: string, requestedType: MediaType | "m
   if (!query) return [];
   const path = requestedType === "multi" ? "/search/multi" : `/search/${requestedType}`;
   const payload = await tmdb(path, new URLSearchParams({ query, language: "ar-AE", include_adult: "false" }));
-  const rows = Array.isArray(payload?.results) ? payload.results : [];
+  if (!payload) throw new Error("TMDB_NOT_CONFIGURED");
+  const rows = Array.isArray(payload.results) ? payload.results : [];
   const output: TmdbSearchResult[] = [];
   for (const item of rows) {
     if (!item || typeof item !== "object") continue;
