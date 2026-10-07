@@ -15,7 +15,6 @@ import health from "../src/routes/v1/health.js";
 import history from "../src/routes/v1/history.js";
 import media from "../src/routes/v1/media.js";
 import movieMetadata from "../src/routes/v1/movie-metadata.js";
-import providers from "../src/routes/v1/providers.js";
 import search from "../src/routes/v1/search.js";
 import suggestions from "../src/routes/v1/suggestions.js";
 import tmdbDetails from "../src/routes/v1/tmdb/details.js";
@@ -40,7 +39,6 @@ const routes: Record<string, RouteHandler> = {
   "/api/v1/history": history,
   "/api/v1/media": media,
   "/api/v1/movie-metadata": movieMetadata,
-  "/api/v1/providers": providers,
   "/api/v1/search": search,
   "/api/v1/suggestions": suggestions,
   "/api/v1/tmdb/details": tmdbDetails,
