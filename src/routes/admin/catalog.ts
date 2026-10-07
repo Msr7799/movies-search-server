@@ -35,6 +35,20 @@ async function controller(request: VercelRequest) {
         if (typeof source.url !== "string" || typeof source.quality !== "string") {
           throw new AppError(400, "INVALID_HLS_SOURCE", "رابط HLS أو الجودة غير صالحة.");
         }
+        let parsedUrl: URL;
+        try {
+          parsedUrl = new URL(source.url);
+        } catch {
+          throw new AppError(400, "INVALID_HLS_SOURCE", "رابط HLS غير صالح.");
+        }
+        if (
+          parsedUrl.protocol !== "https:" ||
+          parsedUrl.username ||
+          parsedUrl.password ||
+          !/\.m3u8(?:$|[?#])/i.test(parsedUrl.href)
+        ) {
+          throw new AppError(400, "INVALID_HLS_SOURCE", "يجب أن يكون رابط HLS آمنًا بصيغة HTTPS وM3U8.");
+        }
         return {
           url: source.url,
           quality: source.quality,

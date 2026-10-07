@@ -68,16 +68,24 @@ Upstash موصى به للكاش/rate-limit الموزع.
 - `POST /api/v1/suggestions`
 - `GET /api/v1/providers` للتوافق فقط؛ يرجع `mode: open_web`
 - `GET /api/v1/health`
-- `GET /api/v1/catalog` الكتالوج العام المستورد من لوحة الإدارة
-- `GET /admin` لوحة إدارة المفاتيح والبروفايدرز وكتالوج HLS
+- `GET /api/v1/catalog` الكتالوج العام
+- `POST /api/v1/history` مزامنة سجل المشاهدة بعد موافقة المستخدم
+- `/api/admin/catalog` إدارة كتالوج HLS (تتطلب جلسة الأدمن)
+- `/api/admin/history` عرض وتعديل وحذف سجل المشاهدة العام (تتطلب جلسة الأدمن)
+- `/api/admin/catalog/from-tmdb` إضافة بيانات فيلم أو مسلسل من TMDB (تتطلب جلسة الأدمن)
 
 ## لوحة الإدارة
 
 تُحفظ مفاتيح Tavily وGemini الإضافية مشفرة في MongoDB ولا تعاد قيمها إلى
-المتصفح. يمكن إضافة providers مرتبة واستيراد JSON من HLS Collector. المستورد
+العميل. يمكن استيراد JSON من HLS Collector، وإضافة البيانات الوصفية عبر TMDB،
+وإدارة روابط HLS وسجل المشاهدة من تطبيق Kotlin. المستورد
 يقبل HTTPS HLS فقط، يتجاهل telemetry والملفات غير المرئية، ويحتاج تأكيد حقوق
 النشر قبل الحفظ. هذا الخادم مخصص لعملاء تطبيق Kotlin ولا تعتمد عليه واجهة
 `any-movie-web`.
+
+تسجيل المشاهدة العام اختياري ويطلب موافقة المستخدم في تطبيق Android؛ يرسل اسم
+الفيلم وملصقه والتقدم ومعرّف تثبيت عشوائيًا، ولا يرسل رابط البث أو معرّف حساب
+Firebase. تُحفظ السجلات في مجموعة MongoDB `playback_history`.
 
 ## Search behavior in 1.9.0
 

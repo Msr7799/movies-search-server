@@ -26,6 +26,31 @@ export const openApiDocument = {
         responses: { "200": { description: "Public movie catalog" } },
       },
     },
+    "/api/v1/history": {
+      post: {
+        summary: "Record playback progress after client consent",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["visitorId", "movieId", "movie", "progress", "duration", "watchedAt"],
+                properties: {
+                  visitorId: { type: "string", format: "uuid" },
+                  movieId: { type: "string", maxLength: 160 },
+                  movie: { type: "object" },
+                  progress: { type: "number", minimum: 0 },
+                  duration: { type: "number", minimum: 0 },
+                  watchedAt: { type: "integer", minimum: 1 },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Playback progress recorded" }, "400": { description: "Invalid history entry" }, "429": { description: "Rate limited" } },
+      },
+    },
     "/api/v1/movie-metadata": {
       get: {
         summary: "Enrich a movie title with TMDB and Wikidata metadata",
