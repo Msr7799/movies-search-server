@@ -48,10 +48,10 @@ export async function tavilySearch(
     const raw = typeof row.raw_content === "string" ? row.raw_content.replace(/\s+/g, " ").slice(0, 3200) : "";
     const snippet = typeof row.content === "string" ? row.content.replace(/\s+/g, " ") : "";
     return {
-      title: row.title,
-      url: row.url,
+      ...(typeof row.title === "string" ? { title: row.title } : {}),
+      ...(typeof row.url === "string" ? { url: row.url } : {}),
       content: [snippet, raw].filter(Boolean).join(" ").slice(0, 4000),
-      score: row.score,
+      ...(typeof row.score === "number" ? { score: row.score } : {}),
     };
   });
 }
