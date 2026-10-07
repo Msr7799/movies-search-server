@@ -10,16 +10,17 @@ import { discoverObservedMedia, discoverPlayableMedia } from "../services/media-
 const schema = z.object({
   url: z.string().url().max(2_000),
   originUrl: z.string().url().max(2_000).optional(),
+  requestHeaders: z.record(z.string().max(64), z.string().max(1_000)).optional(),
 }).strict();
 
 export async function mediaController(request: VercelRequest, context: RequestContext) {
   assertJsonBodySize(request);
-  const input = parseBody(request, schema) as { url: string; originUrl?: string };
+  const input = parseBody(request, schema) as { url: string; originUrl?: string; requestHeaders?: Record<string, string> };
   await enforceRateLimit("media", context.ip, Math.max(10, config.searchLimit * 2), 600);
 
   const providerUrl = input.originUrl ?? input.url;
   const media = input.originUrl
-    ? await discoverObservedMedia(input.url, input.originUrl)
+    ? await discoverObservedMedia(input.url, input.originUrl, input.requestHeaders ?? {})
     : await discoverPlayableMedia(input.url);
 
   const provider = providerFor(providerUrl);

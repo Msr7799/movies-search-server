@@ -10,6 +10,7 @@ const MEDIA_TIMEOUT_MS = 4_000;
 const MAX_REDIRECTS = 3;
 const MAX_CRAWL_DEPTH = 2;
 const MAX_CRAWL_PAGES = 10;
+const SAFE_FORWARD_HEADERS = new Set(["accept", "accept-language", "origin", "referer", "range", "user-agent"]);
 
 type ExtractedMedia = {
   hls: string[];
@@ -76,9 +77,20 @@ async function readTextLimited(response: Response, maxBytes: number) {
   }
 }
 
+function sanitizePlaybackHeaders(input?: Record<string, string>) {
+  const output: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(input ?? {})) {
+    const normalized = key.toLowerCase();
+    const value = String(raw ?? "").trim();
+    if (!SAFE_FORWARD_HEADERS.has(normalized) || !value) continue;
+    output[normalized] = value.slice(0, 1000);
+  }
+  return output;
+}
+
 async function fetchPublicText(
   initialUrl: string,
-  options: { maxBytes: number; timeoutMs: number; referer?: string },
+  options: { maxBytes: number; timeoutMs: number; referer?: string; headers?: Record<string, string> },
 ): Promise<FetchTextResult> {
   let current = initialUrl;
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
@@ -92,8 +104,9 @@ async function fetchPublicText(
         signal: controller.signal,
         headers: {
           Accept: "text/html,application/xhtml+xml,application/json,text/plain,application/vnd.apple.mpegurl,application/x-mpegURL,video/*;q=0.9,audio/*;q=0.8,*/*;q=0.4",
-          "User-Agent": "AnyMovieOpenWebProbe/1.9",
-          ...(options.referer ? { Referer: options.referer } : {}),
+          "User-Agent": "AnyMovieOpenWebProbe/2.1",
+          ...sanitizePlaybackHeaders(options.headers),
+          ...(options.referer && !sanitizePlaybackHeaders(options.headers).referer ? { Referer: options.referer } : {}),
         },
       });
       if ([301, 302, 303, 307, 308].includes(response.status)) {
@@ -279,47 +292,130 @@ export function extractMediaCandidates(markup: string, baseUrl: string): Extract
   };
 }
 
-export function analyzeHlsManifest(text: string) {
+function parseHlsAttributes(line: string) {
+  const payload = line.includes(":") ? line.slice(line.indexOf(":") + 1) : "";
+  const attrs: Record<string, string> = {};
+  let token = "";
+  let quoted = false;
+  const parts: string[] = [];
+  for (const char of payload) {
+    if (char === '"') quoted = !quoted;
+    if (char === "," && !quoted) {
+      parts.push(token);
+      token = "";
+    } else token += char;
+  }
+  if (token) parts.push(token);
+  for (const part of parts) {
+    const index = part.indexOf("=");
+    if (index < 0) continue;
+    const key = part.slice(0, index).trim().toUpperCase();
+    const value = part.slice(index + 1).trim().replace(/^"|"$/g, "");
+    if (key) attrs[key] = value;
+  }
+  return attrs;
+}
+
+export function analyzeHlsManifest(text: string, manifestUrl?: string) {
   const normalized = text.replace(/\r\n/g, "\n");
-  const valid = normalized.trimStart().startsWith("#EXTM3U");
-  const variants = valid ? (normalized.match(/^#EXT-X-STREAM-INF:/gim)?.length ?? 0) : 0;
-  const audioRenditions = valid ? (normalized.match(/^#EXT-X-MEDIA:[^\n]*TYPE=AUDIO/gim)?.length ?? 0) : 0;
-  const subtitleLines = valid ? [...normalized.matchAll(/^#EXT-X-MEDIA:([^\n]*TYPE=SUBTITLES[^\n]*)/gim)] : [];
-  const subtitleLanguages = [...new Set(subtitleLines.flatMap((match) => {
-    const line = match[1] ?? "";
-    const raw = line.match(/LANGUAGE=["']?([^,"']+)/i)?.[1] ?? line.match(/NAME=["']([^"']+)/i)?.[1];
-    const value = raw ? normalizeSubtitleLanguage(raw) : undefined;
-    return value ? [value] : [];
-  }))];
-  const mediaPlaylist = valid && /(?:^|\n)#EXTINF:/i.test(normalized);
-  const encrypted = valid && /#EXT-X-(?:SESSION-)?KEY:[^\n]*METHOD=(?!NONE(?:,|$))/i.test(normalized);
-  const durations = valid ? [...normalized.matchAll(/^#EXTINF:([0-9.]+)/gim)].map((match) => Number(match[1])).filter(Number.isFinite) : [];
-  const durationSeconds = durations.length > 0 ? Math.round(durations.reduce((sum, value) => sum + value, 0)) : undefined;
-  const firstVariantUri = valid && variants > 0
-    ? normalized.match(/^#EXT-X-STREAM-INF:[^\n]*\n([^#\n][^\n]*)/im)?.[1]?.trim()
-    : undefined;
+  const lines = normalized.split("\n").map((line) => line.trim()).filter(Boolean);
+  const valid = lines[0]?.startsWith("#EXTM3U") === true;
+  const variants: Array<{
+    url?: string;
+    bandwidth?: number;
+    resolution?: string;
+    width?: number;
+    height?: number;
+    codecs?: string;
+  }> = [];
+  const subtitleLanguages = new Set<string>();
+  let audioRenditions = 0;
+  let subtitleRenditions = 0;
+  let encrypted = false;
+  let drmProtected = false;
+  let durationSeconds = 0;
+  let mediaPlaylist = false;
+  let endList = false;
+
+  if (valid) {
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index]!;
+      if (line === "#EXT-X-ENDLIST") endList = true;
+      if (line.startsWith("#EXTINF:")) {
+        mediaPlaylist = true;
+        const duration = Number.parseFloat(line.slice("#EXTINF:".length).split(",", 1)[0] ?? "");
+        if (Number.isFinite(duration)) durationSeconds += duration;
+      }
+      if (line.startsWith("#EXT-X-STREAM-INF:")) {
+        const attrs = parseHlsAttributes(line);
+        let uri: string | undefined;
+        for (let next = index + 1; next < lines.length; next += 1) {
+          const candidate = lines[next]!;
+          if (!candidate.startsWith("#")) {
+            uri = candidate;
+            break;
+          }
+        }
+        const resolution = attrs.RESOLUTION;
+        const match = resolution?.match(/^(\d+)x(\d+)$/i);
+        const bandwidth = Number.parseInt(attrs.BANDWIDTH ?? "", 10);
+        const resolvedUrl = uri && manifestUrl ? safeResolvedUrl(uri, manifestUrl) : uri;
+        variants.push({
+          ...(resolvedUrl ? { url: resolvedUrl } : {}),
+          ...(Number.isFinite(bandwidth) && bandwidth > 0 ? { bandwidth } : {}),
+          ...(resolution ? { resolution } : {}),
+          ...(match ? { width: Number(match[1]), height: Number(match[2]) } : {}),
+          ...(attrs.CODECS ? { codecs: attrs.CODECS } : {}),
+        });
+      }
+      if (line.startsWith("#EXT-X-MEDIA:")) {
+        const attrs = parseHlsAttributes(line);
+        const type = (attrs.TYPE ?? "").toUpperCase();
+        if (type === "AUDIO") audioRenditions += 1;
+        if (type === "SUBTITLES") {
+          subtitleRenditions += 1;
+          const raw = attrs.LANGUAGE ?? attrs.NAME;
+          const language = raw ? normalizeSubtitleLanguage(raw) : undefined;
+          if (language) subtitleLanguages.add(language);
+        }
+      }
+      if (line.startsWith("#EXT-X-KEY:") || line.startsWith("#EXT-X-SESSION-KEY:")) {
+        const attrs = parseHlsAttributes(line);
+        const method = (attrs.METHOD ?? "").toUpperCase();
+        const keyFormat = (attrs.KEYFORMAT ?? "identity").trim().toLowerCase();
+        if (method && method !== "NONE") encrypted = true;
+        if (method.startsWith("SAMPLE-AES") || !["", "identity"].includes(keyFormat)) drmProtected = true;
+      }
+    }
+  }
+
+  const firstVariantUri = variants.find((item) => item.url)?.url;
   return {
     valid,
-    master: valid && variants > 0,
-    variantCount: variants,
+    master: valid && variants.length > 0,
+    variantCount: variants.length,
+    variants,
     audioRenditionCount: audioRenditions,
-    subtitleRenditionCount: subtitleLines.length,
-    subtitleLanguages,
+    subtitleRenditionCount: subtitleRenditions,
+    subtitleLanguages: [...subtitleLanguages],
     ...(firstVariantUri ? { firstVariantUri } : {}),
-    ...(mediaPlaylist ? { live: !/(?:^|\n)#EXT-X-ENDLIST(?:\n|$)/i.test(normalized) } : {}),
-    ...(durationSeconds === undefined ? {} : { durationSeconds }),
+    ...(mediaPlaylist ? { live: !endList } : {}),
+    ...(durationSeconds > 0 ? { durationSeconds: Math.round(durationSeconds) } : {}),
     encrypted,
+    drmProtected,
   };
 }
 
-async function inspectHls(url: string, referer?: string) {
+async function inspectHls(url: string, referer?: string, requestHeaders?: Record<string, string>) {
   try {
+    const playbackHeaders = sanitizePlaybackHeaders({ ...(requestHeaders ?? {}), ...(referer ? { referer } : {}) });
     const response = await fetchPublicText(url, {
       maxBytes: MAX_MANIFEST_BYTES,
       timeoutMs: MEDIA_TIMEOUT_MS,
       ...(referer ? { referer } : {}),
+      headers: playbackHeaders,
     });
-    let info = analyzeHlsManifest(response.text);
+    let info = analyzeHlsManifest(response.text, response.url);
     const verified = info.valid || response.contentType.includes("mpegurl");
 
     // Master playlists usually do not contain EXTINF durations. Inspect one child
@@ -328,18 +424,22 @@ async function inspectHls(url: string, referer?: string) {
       const childUrl = safeResolvedUrl(info.firstVariantUri, response.url);
       if (childUrl) {
         try {
+          const childReferer = playbackHeaders.referer || response.url;
+          const childHeaders = sanitizePlaybackHeaders({ ...playbackHeaders, referer: childReferer });
           const child = await fetchPublicText(childUrl, {
             maxBytes: MAX_MANIFEST_BYTES,
             timeoutMs: MEDIA_TIMEOUT_MS,
-            referer: response.url,
+            referer: childReferer,
+            headers: childHeaders,
           });
-          const childInfo = analyzeHlsManifest(child.text);
+          const childInfo = analyzeHlsManifest(child.text, child.url);
           if (childInfo.valid) {
             info = {
               ...info,
               ...(childInfo.live === undefined ? {} : { live: childInfo.live }),
               ...(childInfo.durationSeconds === undefined ? {} : { durationSeconds: childInfo.durationSeconds }),
               encrypted: info.encrypted || childInfo.encrypted,
+              drmProtected: info.drmProtected || childInfo.drmProtected,
             };
           }
         } catch {
@@ -347,22 +447,24 @@ async function inspectHls(url: string, referer?: string) {
         }
       }
     }
-    return { verified, url: response.url, info };
+    return { verified, url: response.url, info, playbackHeaders };
   } catch {
-    return { verified: false, url, info: analyzeHlsManifest("") };
+    return { verified: false, url, info: analyzeHlsManifest(""), playbackHeaders: sanitizePlaybackHeaders({ ...(requestHeaders ?? {}), ...(referer ? { referer } : {}) }) };
   }
 }
 
-async function inspectVideo(url: string, referer?: string) {
+async function inspectVideo(url: string, referer?: string, requestHeaders?: Record<string, string>) {
   try {
+    const playbackHeaders = sanitizePlaybackHeaders({ ...(requestHeaders ?? {}), ...(referer ? { referer } : {}) });
     const response = await fetchPublicText(url, {
       maxBytes: 32 * 1024,
       timeoutMs: MEDIA_TIMEOUT_MS,
       ...(referer ? { referer } : {}),
+      headers: playbackHeaders,
     });
-    return { verified: response.contentType.startsWith("video/"), url: response.url };
+    return { verified: response.contentType.startsWith("video/"), url: response.url, playbackHeaders };
   } catch {
-    return { verified: false, url };
+    return { verified: false, url, playbackHeaders: sanitizePlaybackHeaders({ ...(requestHeaders ?? {}), ...(referer ? { referer } : {}) }) };
   }
 }
 
@@ -376,6 +478,8 @@ function hlsInfoPatch(info: HlsInfo): Partial<DiscoveryResult> {
     ...(info.live === undefined ? {} : { hlsLive: info.live }),
     ...(info.durationSeconds === undefined ? {} : { hlsDurationSeconds: info.durationSeconds }),
     hlsEncrypted: info.encrypted,
+    hlsDrmProtected: info.drmProtected,
+    ...(info.variants.length > 0 ? { hlsVariants: info.variants } : {}),
   };
 }
 
@@ -425,11 +529,12 @@ async function discoverPage(
       hlsUrl: inspected.url,
       ...directPatch(direct),
       ...hlsInfoPatch(inspected.info),
+      ...(Object.keys(inspected.playbackHeaders).length > 0 ? { playbackHeaders: inspected.playbackHeaders } : {}),
     };
   }
   if (direct.playable && direct.kind === "video" && direct.playUrl) {
     const inspected = await inspectVideo(direct.playUrl, referer);
-    if (inspected.verified) return { ...direct, playUrl: inspected.url, downloadUrl: inspected.url, ...directPatch(direct) };
+    if (inspected.verified) return { ...direct, playUrl: inspected.url, downloadUrl: inspected.url, ...directPatch(direct), ...(Object.keys(inspected.playbackHeaders).length > 0 ? { playbackHeaders: inspected.playbackHeaders } : {}) };
   }
 
   try {
@@ -439,7 +544,7 @@ async function discoverPage(
       ...(referer ? { referer } : {}),
     });
     if (page.contentType.includes("mpegurl") || page.text.trimStart().startsWith("#EXTM3U")) {
-      const info = analyzeHlsManifest(page.text);
+      const info = analyzeHlsManifest(page.text, page.url);
       return { playable: true, playUrl: page.url, hlsUrl: page.url, kind: "hls", detectedBy: "content_type", ...hlsInfoPatch(info) };
     }
     if (page.contentType.startsWith("video/")) {
@@ -457,11 +562,12 @@ async function discoverPage(
       kind: "hls",
       detectedBy: "html_manifest",
       ...hlsInfoPatch(hls.info),
+      ...(Object.keys(hls.playbackHeaders).length > 0 ? { playbackHeaders: hls.playbackHeaders } : {}),
     }, pageSubtitles);
 
     const videoChecks = await Promise.all(extracted.video.slice(0, 8).map(async (videoUrl) => inspectVideo(videoUrl, page.url)));
     const video = videoChecks.find((item) => item.verified);
-    if (video) return { playable: true, playUrl: video.url, kind: "video", downloadable: true, downloadUrl: video.url, detectedBy: "html_media", ...pageSubtitles };
+    if (video) return { playable: true, playUrl: video.url, kind: "video", downloadable: true, downloadUrl: video.url, detectedBy: "html_media", ...pageSubtitles, ...(Object.keys(video.playbackHeaders).length > 0 ? { playbackHeaders: video.playbackHeaders } : {}) };
 
     const nestedResults = await Promise.all(
       extracted.pages.slice(0, 6).map((nested) => discoverPage(nested, state, depth + 1, page.url)),
@@ -479,14 +585,20 @@ export async function discoverPlayableMedia(pageUrl: string): Promise<Partial<Di
   return discoverPage(pageUrl, { visited: new Set<string>(), pages: 0 }, 0);
 }
 
-export async function discoverObservedMedia(candidateUrl: string, originUrl: string): Promise<Partial<DiscoveryResult>> {
+export async function discoverObservedMedia(
+  candidateUrl: string,
+  originUrl: string,
+  requestHeaders: Record<string, string> = {},
+): Promise<Partial<DiscoveryResult>> {
   await assertPublicWebUrl(originUrl);
   await assertPublicWebUrl(candidateUrl);
   const parsed = new URL(candidateUrl);
   const pathname = parsed.pathname.toLowerCase();
+  const safeHeaders = sanitizePlaybackHeaders(requestHeaders);
+  const referer = safeHeaders.referer || originUrl;
   const looksHls = pathname.endsWith(".m3u8") || /(?:m3u8|hls|playlist|manifest)/i.test(`${pathname}${parsed.search}`);
   if (looksHls) {
-    const inspected = await inspectHls(candidateUrl, originUrl);
+    const inspected = await inspectHls(candidateUrl, referer, safeHeaders);
     if (inspected.verified) return {
       playable: true,
       playUrl: inspected.url,
@@ -494,11 +606,20 @@ export async function discoverObservedMedia(candidateUrl: string, originUrl: str
       kind: "hls",
       detectedBy: "webview_observed",
       ...hlsInfoPatch(inspected.info),
+      ...(Object.keys(inspected.playbackHeaders).length > 0 ? { playbackHeaders: inspected.playbackHeaders } : {}),
     };
   }
   if (/\.(?:mp4|webm|m4v|mov|ogv|ogg)$/i.test(pathname)) {
-    const inspected = await inspectVideo(candidateUrl, originUrl);
-    if (inspected.verified) return { playable: true, playUrl: inspected.url, kind: "video", downloadable: true, downloadUrl: inspected.url, detectedBy: "webview_observed" };
+    const inspected = await inspectVideo(candidateUrl, referer, safeHeaders);
+    if (inspected.verified) return {
+      playable: true,
+      playUrl: inspected.url,
+      kind: "video",
+      downloadable: true,
+      downloadUrl: inspected.url,
+      detectedBy: "webview_observed",
+      ...(Object.keys(inspected.playbackHeaders).length > 0 ? { playbackHeaders: inspected.playbackHeaders } : {}),
+    };
   }
   return { playable: false };
 }

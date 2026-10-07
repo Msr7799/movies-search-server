@@ -1,5 +1,14 @@
 export type ContentType = "full_movie" | "availability_page" | "short_clip";
 
+export type HlsVariantInfo = {
+  url?: string;
+  bandwidth?: number;
+  resolution?: string;
+  width?: number;
+  height?: number;
+  codecs?: string;
+};
+
 export type DiscoveryResult = {
   id: string;
   title: string;
@@ -24,6 +33,9 @@ export type DiscoveryResult = {
   hlsDurationSeconds?: number;
   hlsLive?: boolean;
   hlsEncrypted?: boolean;
+  hlsDrmProtected?: boolean;
+  hlsVariants?: HlsVariantInfo[];
+  playbackHeaders?: Record<string, string>;
   providerPriority: number;
   confidence: number;
 };
