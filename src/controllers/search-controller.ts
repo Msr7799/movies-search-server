@@ -34,6 +34,7 @@ const schema = z
       )
       .default("any"),
     allowShortClips: z.boolean().default(false),
+    searchProvider: z.enum(["tavily", "serper"]).default("tavily"),
     resultLimit: z.number().int().min(5).max(30).default(10),
   })
   .strict();
@@ -72,6 +73,7 @@ export async function searchController(
       subtitleLanguage: input.subtitleLanguage,
       subtitleLanguageLabel: SUBTITLE_LANGUAGES[input.subtitleLanguage],
       allowShortClips: input.allowShortClips,
+      searchProvider: input.searchProvider,
       resultLimit: input.resultLimit,
     },
     context.requestId,

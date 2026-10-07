@@ -12,6 +12,7 @@ export default endpoint(["GET"], (_request, context) => ({
     search: "/api/v1/search",
     media: "/api/v1/media",
     catalog: "/api/v1/catalog",
+    movieMetadata: "/api/v1/movie-metadata?title=Inception%202010",
     admin: "/admin",
   },
   requestId: context.requestId,

@@ -2,12 +2,14 @@ import { config } from "../config.js";
 import type {
   DiscoveryResponse,
   DiscoveryResult,
+  SearchProvider,
   TavilyResult,
 } from "../domain/types.js";
 import { geminiJson } from "./gemini.js";
 import { makeCandidates, toDiscoveryResult } from "./scoring.js";
 import { enrichDiscoveryResults } from "./media-discovery.js";
 import { tavilyCrawl, tavilySearch } from "./tavily.js";
+import { serperSearch } from "./serper.js";
 import { managedProviders } from "../admin/settings.js";
 
 type SearchInput = {
@@ -17,6 +19,7 @@ type SearchInput = {
   subtitleLanguageLabel: string;
   allowShortClips: boolean;
   resultLimit: number;
+  searchProvider: SearchProvider;
 };
 
 type Understanding = {
@@ -252,15 +255,16 @@ async function understandOrFallback(
 }
 
 async function runSearchQueries(
+  provider: SearchProvider,
   queries: string[],
   perQuery: number,
   depth: "basic" | "advanced" = "basic",
   includeRawContent = false,
 ) {
   const settled = await Promise.allSettled(
-    queries.map((query) =>
-      tavilySearch(query, perQuery, depth, includeRawContent),
-    ),
+    queries.map((query) => provider === "serper"
+      ? serperSearch(query, perQuery)
+      : tavilySearch(query, perQuery, depth, includeRawContent)),
   );
   return {
     partial: settled.some((item) => item.status === "rejected"),
@@ -387,10 +391,10 @@ export async function searchMovies(
   const exactQuery = queries.slice(0, 1);
   const firstBatch = [...queries.slice(1, Math.min(5, queries.length)), ...providerQueries];
   const secondBatch = queries.slice(1 + firstBatch.length, 9);
-  const exact = await runSearchQueries(exactQuery, perQuery, "advanced", true);
+  const exact = await runSearchQueries(input.searchProvider, exactQuery, perQuery, "advanced", true);
   const first =
     firstBatch.length > 0
-      ? await runSearchQueries(firstBatch, perQuery, "basic")
+      ? await runSearchQueries(input.searchProvider, firstBatch, perQuery, "basic")
       : { partial: false, results: [] as TavilyResult[] };
   let partialSearch = exact.partial || first.partial;
   let merged = uniqueSearchResults([...exact.results, ...first.results]);
@@ -401,7 +405,7 @@ export async function searchMovies(
   let probedCount = enrichment.probed;
 
   if (results.length < target && secondBatch.length > 0) {
-    const second = await runSearchQueries(secondBatch, perQuery, "basic");
+    const second = await runSearchQueries(input.searchProvider, secondBatch, perQuery, "basic");
     partialSearch ||= second.partial;
     merged = uniqueSearchResults([...merged, ...second.results]);
     const seenCandidateUrls = new Set(candidates.map((item) => item.url));
@@ -432,6 +436,7 @@ export async function searchMovies(
       year,
     );
     const indexed = await runSearchQueries(
+      input.searchProvider,
       indexedQueries,
       Math.min(12, perQuery),
       "basic",
@@ -461,6 +466,7 @@ export async function searchMovies(
   let crawlPartial = false;
   if (
     results.length < target &&
+    input.searchProvider === "tavily" &&
     config.tavilyCrawlRoots > 0 &&
     candidates.length > 0
   ) {
@@ -528,7 +534,8 @@ export async function searchMovies(
     (item) => item.detectedBy === "webview_candidate",
   ).length;
   const directCount = results.length - webViewCount;
-  const diagnostics = `Tavily أعاد ${merged.length} صفحة مرشحة، وتم فحص ${probedCount} صفحة فعليًا. نتائج مباشرة: ${directCount}، وصفحات تشغيل ديناميكية: ${webViewCount}`;
+  const searchProviderLabel = input.searchProvider === "serper" ? "Serper" : "Tavily";
+  const diagnostics = `${searchProviderLabel} أعاد ${merged.length} صفحة مرشحة، وتم فحص ${probedCount} صفحة فعليًا. نتائج مباشرة: ${directCount}، وصفحات تشغيل ديناميكية: ${webViewCount}`;
   return {
     understoodTitle: title,
     ...(original ? { originalTitle: original } : {}),
@@ -543,6 +550,7 @@ export async function searchMovies(
       cached: false,
       partial: partialSearch || crawlPartial,
       searchedAt: new Date().toISOString(),
+      searchProvider: input.searchProvider,
     },
   };
 }

@@ -1,4 +1,5 @@
 export type ContentType = "full_movie" | "availability_page" | "short_clip";
+export type SearchProvider = "tavily" | "serper";
 
 export type HlsVariantInfo = {
   url?: string;
@@ -58,6 +59,7 @@ export type DiscoveryResponse = {
     cached: boolean;
     partial: boolean;
     searchedAt: string;
+    searchProvider: SearchProvider;
   };
 };
 

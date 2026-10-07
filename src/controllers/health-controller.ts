@@ -9,7 +9,7 @@ export async function healthController(_request: unknown, context: RequestContex
     ? await pingMongo().catch(() => ({ connected: false, latencyMs: 0 }))
     : { connected: false, latencyMs: 0 };
   return {
-    status: services.tavily && services.geminiSearch && services.geminiSuggestions ? "ready" : "degraded",
+    status: (services.tavily || services.serper) && services.geminiSearch && services.geminiSuggestions ? "ready" : "degraded",
     service: "any-movie-server",
     version: "2.1.0",
     time: new Date().toISOString(),

@@ -18,8 +18,11 @@ const providerSchema = z.object({
 const schema = z.object({
   secrets: z.object({
     TAVILY_API_KEY: z.string().trim().min(8).max(500).nullable().optional(),
+    SERPER_API_KEY: z.string().trim().min(8).max(500).nullable().optional(),
     GEMINI_API_KEY: z.string().trim().min(8).max(500).nullable().optional(),
     GEMINI_AUTO_SUGGESTED_API_KEY: z.string().trim().min(8).max(500).nullable().optional(),
+    TMDB_API_KEY: z.string().trim().min(8).max(500).nullable().optional(),
+    API_READ_AUTH_TOKEN: z.string().trim().min(8).max(2_000).nullable().optional(),
   }).strict().optional(),
   providers: z.array(providerSchema).max(100).optional(),
 }).strict();
@@ -29,7 +32,7 @@ async function controller(request: VercelRequest) {
   if (request.method === "GET") return publicSettings();
   const input = parseBody(request, schema);
   const secrets: Partial<Record<ManagedKey, string | null>> = {};
-  for (const name of ["TAVILY_API_KEY", "GEMINI_API_KEY", "GEMINI_AUTO_SUGGESTED_API_KEY"] as const) {
+  for (const name of ["TAVILY_API_KEY", "SERPER_API_KEY", "GEMINI_API_KEY", "GEMINI_AUTO_SUGGESTED_API_KEY", "TMDB_API_KEY", "API_READ_AUTH_TOKEN"] as const) {
     const value = input.secrets?.[name];
     if (value !== undefined) secrets[name] = value;
   }

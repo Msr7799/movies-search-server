@@ -26,6 +26,13 @@ export const openApiDocument = {
         responses: { "200": { description: "Public movie catalog" } },
       },
     },
+    "/api/v1/movie-metadata": {
+      get: {
+        summary: "Enrich a movie title with TMDB and Wikidata metadata",
+        parameters: [{ name: "title", in: "query", required: true, schema: { type: "string", minLength: 2, maxLength: 180 } }],
+        responses: { "200": { description: "Normalized movie metadata" } },
+      },
+    },
     "/api/v1/suggestions": {
       post: {
         summary: "AI title suggestions using the isolated suggestion key",
@@ -75,6 +82,7 @@ export const openApiDocument = {
                   movieLanguage: { type: "string", default: "any" },
                   subtitleLanguage: { type: "string", default: "any" },
                   allowShortClips: { type: "boolean", default: false },
+                  searchProvider: { type: "string", enum: ["tavily", "serper"], default: "tavily" },
                   resultLimit: { type: "integer", minimum: 5, maximum: 30, default: 10 },
                 },
               },

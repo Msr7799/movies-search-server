@@ -2,7 +2,13 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { database, mongoConfigured } from "../infrastructure/mongodb.js";
 import { adminEncryptionSecret } from "./auth.js";
 
-export type ManagedKey = "TAVILY_API_KEY" | "GEMINI_API_KEY" | "GEMINI_AUTO_SUGGESTED_API_KEY";
+export type ManagedKey =
+  | "TAVILY_API_KEY"
+  | "SERPER_API_KEY"
+  | "GEMINI_API_KEY"
+  | "GEMINI_AUTO_SUGGESTED_API_KEY"
+  | "TMDB_API_KEY"
+  | "API_READ_AUTH_TOKEN";
 export type ManagedProvider = {
   id: string;
   name: string;
@@ -18,7 +24,14 @@ type SettingsDocument = {
   updatedAt?: Date;
 };
 
-const keys: ManagedKey[] = ["TAVILY_API_KEY", "GEMINI_API_KEY", "GEMINI_AUTO_SUGGESTED_API_KEY"];
+const keys: ManagedKey[] = [
+  "TAVILY_API_KEY",
+  "SERPER_API_KEY",
+  "GEMINI_API_KEY",
+  "GEMINI_AUTO_SUGGESTED_API_KEY",
+  "TMDB_API_KEY",
+  "API_READ_AUTH_TOKEN",
+];
 let settingsCache: { value: SettingsDocument | null; expiresAt: number } | undefined;
 
 function encryptionKey() {
