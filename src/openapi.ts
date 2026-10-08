@@ -2,7 +2,7 @@ export const openApiDocument = {
   openapi: "3.1.0",
   info: {
     title: "Any Movie API",
-    version: "2.1.0",
+    version: "2.3.0",
     description:
       "Arabic-first open-web movie media discovery API for web and mobile clients.",
   },
@@ -31,6 +31,32 @@ export const openApiDocument = {
         summary: "Enrich a movie title with TMDB and Wikidata metadata",
         parameters: [{ name: "title", in: "query", required: true, schema: { type: "string", minLength: 2, maxLength: 180 } }],
         responses: { "200": { description: "Normalized movie metadata" } },
+      },
+    },
+    "/api/v1/tmdb/search": {
+      get: {
+        summary: "Search TMDB without exposing the server API key",
+        parameters: [
+          { name: "q", in: "query", required: true, schema: { type: "string", minLength: 2, maxLength: 120 } },
+          { name: "type", in: "query", required: false, schema: { type: "string", enum: ["multi", "movie", "tv"], default: "multi" } },
+        ],
+        responses: { "200": { description: "TMDB search results" }, "503": { description: "TMDB is not configured" } },
+      },
+    },
+    "/api/v1/tmdb/details": {
+      get: {
+        summary: "Read normalized movie or TV metadata by TMDB id",
+        parameters: [
+          { name: "id", in: "query", required: true, schema: { type: "integer", minimum: 1 } },
+          { name: "type", in: "query", required: false, schema: { type: "string", enum: ["movie", "tv"], default: "movie" } },
+        ],
+        responses: { "200": { description: "Normalized TMDB metadata" }, "503": { description: "TMDB is not configured" } },
+      },
+    },
+    "/api/v1/catalog/from-tmdb": {
+      post: {
+        summary: "Resolve a TMDB item into a personal-library catalog shape without publishing playback sources",
+        responses: { "200": { description: "Metadata-only catalog item" } },
       },
     },
     "/api/v1/suggestions": {
