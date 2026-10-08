@@ -3,16 +3,16 @@
   "framework": null,
   "outputDirectory": "public",
   "rewrites": [
-    { "source": "/admin", "destination": "/admin.html" }
+    { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/api/discover", "destination": "/api/index?route=search" },
+    { "source": "/api/suggest", "destination": "/api/index?route=suggestions" },
+    { "source": "/api/v1/:path*", "destination": "/api/index?route=:path*" },
+    { "source": "/api/admin/:path*", "destination": "/api/admin?route=:path*" }
   ],
   "functions": {
-    "api/v1/search.ts": { "maxDuration": 60 },
-    "api/v1/media.ts": { "maxDuration": 20 },
-    "api/discover.ts": { "maxDuration": 60 },
-    "api/v1/suggestions.ts": { "maxDuration": 20 },
-    "api/v1/movie-metadata.ts": { "maxDuration": 25 },
-    "api/suggest.ts": { "maxDuration": 20 },
-    "api/admin/catalog.ts": { "maxDuration": 30 }
+    "api/index.ts": { "maxDuration": 60 },
+    "api/admin.ts": { "maxDuration": 30 },
+    "api/openapi.ts": { "maxDuration": 10 }
   },
   "headers": [
     {
