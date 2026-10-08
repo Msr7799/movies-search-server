@@ -4,16 +4,20 @@
   "outputDirectory": "public",
   "rewrites": [
     {
+      "source": "/admin",
+      "destination": "/admin.html"
+    },
+    {
       "source": "/api",
-      "destination": "/api/[...path]"
+      "destination": "/api/index"
     },
     {
       "source": "/api/:path*",
-      "destination": "/api/[...path]"
+      "destination": "/api/index?__api_route=:path*"
     }
   ],
   "functions": {
-    "api/[...path].ts": {
+    "api/index.ts": {
       "maxDuration": 60
     }
   },

@@ -1,3 +1,15 @@
+## Vercel Hobby: one Serverless Function
+
+This is a free-plan-safe server build. All existing public API URLs are rewritten to
+`api/index.ts`, which dispatches requests to the handlers in `src/routes/`.
+Do **not** put additional executable files inside `api/`: each file counts as
+another Vercel Function on non-framework deployments. The `build` command runs
+`scripts/check-vercel-functions.mjs` to guard against accidental regressions.
+
+Keep Vercel Project **Root Directory** set to this server project's root.
+Deploy the repository commit containing these changes (not a previous commit),
+then check `GET /api` and `GET /api/v1/health`.
+
 # Any Movie Server 2.1.0
 
 خادم بحث عام واكتشاف وسائط لتطبيق Any Movie. لا توجد قائمة providers أو domains مفروضة على Tavily Search.
@@ -66,7 +78,6 @@ Upstash موصى به للكاش/rate-limit الموزع.
 - `POST /api/v1/search`
 - `POST /api/v1/media`
 - `POST /api/v1/suggestions`
-- `GET /api/v1/providers` للتوافق فقط؛ يرجع `mode: open_web`
 - `GET /api/v1/health`
 - `GET /api/v1/catalog` الكتالوج العام
 - `POST /api/v1/history` مزامنة سجل المشاهدة بعد موافقة المستخدم

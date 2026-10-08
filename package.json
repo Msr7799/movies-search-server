@@ -9,7 +9,7 @@
   },
   "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "node scripts/check-vercel-functions.mjs && tsc --noEmit",
     "check": "pnpm run build && pnpm test",
     "smoke:providers": "node --env-file=.env scripts/provider-smoke.mjs",
     "test": "vitest run",
