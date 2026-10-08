@@ -62,7 +62,7 @@ async function tmdb(path: string, params = new URLSearchParams()) {
     effectiveSecret("API_READ_AUTH_TOKEN"),
     effectiveSecret("TMDB_API_KEY"),
   ]);
-  if (!token && !key) return null;
+  if (!token && !key) throw new Error("TMDB_NOT_CONFIGURED");
   if (!token && key) params.set("api_key", key);
   const response = await fetch(`${TMDB}${path}?${params}`, {
     headers: token ? { Authorization: `Bearer ${token}`, Accept: "application/json" } : { Accept: "application/json" },
