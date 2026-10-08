@@ -11,7 +11,7 @@ export async function healthController(_request: unknown, context: RequestContex
   return {
     status: (services.tavily || services.serper) && services.geminiSearch && services.geminiSuggestions ? "ready" : "degraded",
     service: "any-movie-server",
-    version: "2.1.0",
+    version: "2.3.0",
     time: new Date().toISOString(),
     services,
     control: { adminConfigured: adminConfigured(), mongo },
