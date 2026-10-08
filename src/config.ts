@@ -81,17 +81,20 @@ export async function requireEnv(name: ManagedKey) {
 }
 
 export async function serviceReadiness() {
-  const [tavily, serper, geminiSearch, geminiSuggestions] = await Promise.all([
+  const [tavily, serper, geminiSearch, geminiSuggestions, tmdbToken, tmdbKey] = await Promise.all([
     effectiveSecret("TAVILY_API_KEY"),
     effectiveSecret("SERPER_API_KEY"),
     effectiveSecret("GEMINI_API_KEY"),
     effectiveSecret("GEMINI_AUTO_SUGGESTED_API_KEY"),
+    effectiveSecret("API_READ_AUTH_TOKEN"),
+    effectiveSecret("TMDB_API_KEY"),
   ]);
   return {
     tavily: Boolean(tavily),
     serper: Boolean(serper),
     geminiSearch: Boolean(geminiSearch),
     geminiSuggestions: Boolean(geminiSuggestions),
+    tmdb: Boolean(tmdbToken || tmdbKey),
     distributedStore: Boolean(
       process.env.UPSTASH_REDIS_REST_URL &&
       process.env.UPSTASH_REDIS_REST_TOKEN,
